@@ -1,26 +1,1160 @@
 ---
 title: "statProject"
 ## markdown file
-Autors: Mojtaba Amini
+Autors: Mojtaba Amini, Javier Alberto Bernal Sigala, Carmen Rocio Ortiz Benitez, Saeed Soufeh
 output: pdf_document
 date: '2022-05-20'
 ---
 
+```{=tex}
+\newpage
+\tableofcontents
+\listoffigures
+\listoftables
+```
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+if (!require(dplyr)) {
+    install.packages("dplyr")
+    require(dplyr)
+}
+
+if (!require(rmarkdown)) {
+    install.packages("rmarkdown")
+    require(rmarkdown)
+}
+
+if (!require(pillar)) {
+    install.packages("pillar")
+    require(pillar)
+}
+
+if (!require(corrplot)) {
+    install.packages("corrplot")
+    require(corrplot)
+}
+
+if (!require(tidyverse)) {
+    install.packages("tidyverse")
+    require(tidyverse)
+}
+if (!require(Amelia)) {
+    install.packages("Amelia")
+    require(Amelia)
+}
+if (!require(naniar)) {
+    install.packages("naniar")
+    require(naniar)
+}
+if (!require(Hmisc)) {
+    install.packages("Hmisc")
+    require(Hmisc)
+}
+
+if (!require(data.table)) {
+    install.packages("data.table")
+    require(data.table)
+}
+
+if (!require(fastDummies)) {
+    install.packages("fastDummies")
+    require(fastDummies)
+}
+if (!require(hrbrthemes)) {
+    install.packages("hrbrthemes")
+    require(hrbrthemes)
+}
+if (!require(viridis)) {
+    install.packages("viridis")
+    require(viridis)
+}
+if (!require(forcats)) {
+    install.packages("forcats")
+    require(forcats)
+}
+if (!require(patchwork)) {
+    install.packages("patchwork")
+    require(patchwork)
+}
+if (!require(magrittr)) {
+    install.packages("magrittr")
+    require(magrittr)
+}
+if (!require(multipanelfigure)) {
+    install.packages("multipanelfigure")
+    require(multipanelfigure)
+}
+if (!require(PerformanceAnalytics)) {
+    install.packages("PerformanceAnalytics")
+    require(PerformanceAnalytics)
+}
+
+library(patchwork)
+library(magrittr)
+library(multipanelfigure)
+library(PerformanceAnalytics)
+
+library(rmarkdown)
+library(pillar)
+library(ggplot2)
+
+library(dplyr)
+library(corrplot)
+library(tidyverse)
+library(Amelia)
+library(naniar)
+library(Hmisc)
+library(data.table)
+library(fastDummies)
+library(hrbrthemes)
+library(viridis)
+library(forcats)
+
+#library(PerformanceAnalytics)
 ```
 
-## R Markdown
+# 1 Introduction
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+Electricity is essential in people's daily life, and prediction of its demand can play a critical role for policy makers, public and private investors to formulate optimal electricity supply plans of power generation and supporting infrastructure. However, it is not straightforward to achieve prediction accuracy and reliability due to the presence of many variables, such as solar exposure, daily minimum and maximum temperatures, etc. Thus, the aim of this project is to build a model that takes into account the factors that influence demand the most, by firstly exploring the data in depth in order to find correlations between variables, and secondly building a prediction model with enough accuracy and efficiency.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+# 2 Objectives
 
-```{r cars}
-summary(cars)
+The main objective of this project is to build a model to predict electricity demand based on different variables. Then, to perform a deep analysis of these variables. Furthermore, we would like to determine how the change of seasons affect demand every year, and also the effect the first stages of the Covid-19 pandemic policies had on it. Finally, we will interpret our findings in order to draw useful insights from the data and results.
+
+# 3 Data Collection
+
+This dataset has 2,106 observations and 14 variables, and it is a record from January 2015 to December 2030 of daily electricity price and demand in the state of Victoria, Australia. It is available publicly (in <https://www.kaggle.com/datasets/aramacus/electricity-demand-in-victoria-australia>). Daily electricity may depend on different factors such as rainfall, solar exposure, whether it was a school day, etc; and also the correlations between them. It is easy to see how any of these variables could be meaningful in our analysis.
+
+## 3.1 Variables description
+
+The variables present on our dataset are:
+
+-   date: the date of the recording;
+-   demand: total daily electricity demand in MWh (megawatt hour);
+-   RRP: a recommended retail price in AUD\$ / MWh (Australian Dollars per MWh);
+-   demand_pos_RRP: total daily demand at positive RRP in MWh;
+-   RRP_positive: averaged positive RRP, weighted by the corresponding daily demand in AUD\$ / MWh (Australian Dollars per MWh);
+-   demand_neg_RRP: total daily demand at negative RRP in MWh (megawatt hour);
+-   RRP_negative: average negative RRP, weighted by the corresponding daily demand in AUD\$ / MWh (Australian Dollars per MWh);
+-   frac_at_neg_RRP: fraction of the day when the demand was traded at negative RRP;
+-   min_temperature: minimum temperature during the day in Celsius;
+-   max_temperature: maximum temperature during the day in Celsius;
+-   solar_exposure: total daily sunlight energy in MJ/m\^2 (megajoule per square meter);
+-   rainfall: rainfall during the day in mm;
+-   school_day: whether students were at school on that day;
+-   holiday: whether the day was a holiday.
+
+It is worth noting that the RRP is calculated considering different components such as wholesale costs, network charges, and retail margin, all information which we do not have access too. Furthermore, the RRP will depend strongly on demand, and that is why we choose to focus on demand instead and will not consider the RRP related columns when building our model.
+
+
+```{r}
+data <- read.csv(file = "complete_dataset.csv")
+summary(data)
+```
+In terms of continuous variables, the values from the RRP 3rd quantile and the maximum differ excessively, which suggests that this might be an outlier. Furthermore, there are only 4 null values and they located in the solar_exposure and rainfall columns. Distribution of demand itself does not vary too much, with values ranging from around 85,000 MWh to 170,000 MWh.
+
+
+## 3.2 Data preparation
+
+We check for "duplicate" rows and find there are none.
+
+```{r}
+cat("Cheking for duplicated rows...", "The dataset has", sum(duplicated(data)), "duplicated rows.\n")
+
+```
+In order to ease the analysis, we proceed to drop the find the missing values and remove them.
+
+```{r}
+#see the missing values
+vis_miss(data)
+
+#drop missing solar_exposure
+data <- data[!is.na(data$solar_exposure),]
+
+#drop missing rainfall
+data <- data[!is.na(data$rainfall),]
 ```
 
-## Including Plots
+Next, we transform the date column from char to date, the min and max temperature into one combined mean temperature (because they are closely related to each other (collinear)), and the holiday and school_day columns from char to categorical (binary).
+
+```{r}
+#convert the date
+data$date <- as.POSIXct(data$date)
+
+#add the mean temperature variable
+data$mean_temperature <- (data$max_temperature + data$min_temperature)/2
+
+#turn the holidays to binary
+data$holiday <- as.factor(data$holiday)
+data <- data %>% 
+    mutate(holiday = recode(holiday, 
+                      "N" = FALSE, 
+                      "Y" = TRUE))
+
+#turn the school_day to binary
+data$school_day <- as.factor(data$school_day) 
+
+data <- data %>% 
+    mutate(school_day = recode(school_day, 
+                      "N" = FALSE, 
+                      "Y" = TRUE))
+
+```
+
+
+
+# 4 Exploratory Data Analysis (EDA)
+
+In this section we will use some visual tools to discover hidden trends and patterns in the dataset that can help us build an accurate and efficient model to make predictions on daily electricity demand.
+
+We start by doing some general analysis on demand, since this is what our model will be centered around.
+
+
+```{r}
+options(repr.plot.width=7, repr.plot.height=5)
+ggplot(data, aes(x= demand/1000)) +
+geom_histogram(aes(y =..density..), fill="pink", color="black", alpha=0.6) +
+geom_density(color= "blue", size =0.8)+
+geom_vline(aes(xintercept= mean(demand/1000)), color="blue",linetype="dashed", size=1) +
+geom_vline(aes(xintercept= median(demand/1000)), color="red",linetype="dashed", size=1) +
+
+labs(x ="Energy Demand x 1000", y="Count")
+```
+
+
+The histogram above shows that the distribution of the energy demand is almost symmetrical with the mean and median values both at around 120,000 Mwh.
+
+
+```{r}
+deamnd_plot <- ggplot(data, aes(x = demand)) +
+geom_boxplot(fill = "pink") +
+geom_point(aes(x= mean(demand), y=0), color="blue")
+
+deamnd_plot
+```
+
+Furthermore, from the box-plot shown above, we can see that the energy demand has a longer tail on the right side, with all the outliers being there. Since the outliers are few and do not differ too much from the values at the end of the right tail, we keep them.
+
+We move on to do some analysis on RRP.
+
+```{r}
+
+options(repr.plot.width=7, repr.plot.height=5)
+ggplot(data, aes(x= RRP)) +
+geom_histogram(aes(y =..density..), fill="pink", color="black", alpha=0.6) +
+geom_density(color= "blue", size =0.8)+
+geom_vline(aes(xintercept= mean(RRP)), color="blue",linetype="dashed", size=1) +
+geom_vline(aes(xintercept= median(RRP)), color="red",linetype="dashed", size=1) +
+
+labs(x ="RRP", y="Count")
+
+```
+
+The above histogram of the RRP shows an extremely long right tail, especially when compared to the left tail. This is probably due to outliers, so we decide to further investigate this.
+
+
+```{r}
+
+
+#OUTLIARS
+Q <- quantile(data$RRP)
+data_ol <- subset(data, data$RRP >= Q[4]+1.5*(Q[4]-Q[2]) | data$RRP<= Q[2]-1.5*(Q[4]-Q[2]))
+
+dim(data_ol)
+
+```
+Indeed, there are 28 outlier values for the RRP variable. Since these differ excessively from the rest, and they are not the variable of our main interest, we remove them and check the new distribution without them.
+
+
+```{r}
+#WITHOUT
+data <- subset(data, data$RRP <= Q[4]+1.5*(Q[4]-Q[2]) & data$RRP>= Q[2]-1.5*(Q[4]-Q[2]))
+
+RRP_plot <- ggplot(data, aes(x = RRP)) +
+geom_boxplot(fill = "pink") +
+geom_point(aes(x= mean(RRP), y=0), color="blue")
+
+RRP_plot
+```
+
+After removing the outliers, the RRP distribution is almost symmetrical, but the right tail is still longer, as seen in the box-plot above. We can derive much more information from this subset.
+
+
+```{r}
+
+options(repr.plot.width=7, repr.plot.height=5)
+ggplot(data, aes(x= RRP)) +
+geom_histogram(aes(y =..density..), fill="pink", color="black", alpha=0.6) +
+geom_density(color= "blue", size =0.8)+
+geom_vline(aes(xintercept= mean(RRP)), color="blue",linetype="dashed", size=1) +
+geom_vline(aes(xintercept= median(RRP)), color="red",linetype="dashed", size=1) +
+
+labs(x ="RRP", y="Count")
+
+```
+
+As for the histogram, without the outliers, RRP is shown to have a bimodal distribution, with the most frequent values in the RRP axis around 40 and 85.
+
+We proceed to analyse the relationship of some categorical variables with electricity demand.
+
+```{r}
+p1 <- ggplot(data, aes(x=demand)) +
+geom_histogram(aes(y=..density..),color="black", fill="pink", bins=40) +
+geom_density(color="blue") +
+geom_vline(aes(xintercept= mean(demand)), color="blue", linetype="dashed",size=1) +
+geom_vline(aes(xintercept= median(demand)), color="red", linetype="dashed",size=1)
+
+
+p2 <- ggplot(data, aes(x = demand)) +
+geom_boxplot(fill = "pink") +
+geom_point(aes(x= mean(demand), y=0), color="blue")
+
+
+p3 <- ggplot(data, aes(x=holiday, y=demand, group=holiday)) +
+  geom_boxplot(fill="pink") +
+  stat_summary(fun=mean, geom="point", color="blue") +
+  coord_flip()
+
+
+p4 <- ggplot(data, aes(x=school_day, y=demand, group=school_day)) +
+  geom_boxplot(fill="pink") +
+  stat_summary(fun=mean, geom="point", color="blue") +
+  coord_flip() 
+
+
+
+p1+p2 +p3+ p4
+```
+
+In the plots above, we can see that the distribution of electricity demand on its own is almost symmetrical. However, when plotted with relation to "holiday", the mean is much lower when the values are True, and also the variance is significantly smaller. As for demand plotted with respect to "school_day", demand is generally higher on school days.
+
+
+```{r}
+options(repr.plot.width=15, repr.plot.height=5)
+sd.colors <- c("#999999", "#E69F00")
+
+p1 <- ggplot(data[data$holiday == FALSE,], aes(x=demand, y= ..density..))+
+geom_histogram(fill=sd.colors[1],bins=20, alpha=.5)+
+geom_density(color=sd.colors[1])
+
+p2 <- ggplot(data[data$holiday == TRUE,], aes(x=demand, y= ..density..))+
+geom_histogram(fill=sd.colors[2],bins=20, alpha=.5)+
+geom_density(color=sd.colors[2])
+
+p3 <- ggplot(data, aes(x = demand, fill = holiday)) +
+geom_density(alpha = 0.5) +
+scale_fill_manual(values=sd.colors)
+
+
+figure1 <- multi_panel_figure(columns = 2, rows = 2, panel_label_type = "none")
+figure1 %<>%
+  fill_panel(p1, column = 1, row = 1) %<>%
+  fill_panel(p2, column = 2, row = 1) %<>%
+  fill_panel(p3, column = 1:2, row = 2)
+figure1
+```
+
+As seen in the density graphs above, mean demand on holidays is much lower than on non-holidays, and the variance is also smaller. For non-holidays, daily demand values are less concentrated.
+
+
+```{r}
+options(repr.plot.width=15, repr.plot.height=5)
+sd.colors <- c("#999999", "#E69F00")
+
+p1 <- ggplot(data[data$school_day == FALSE,], aes(x=demand, y= ..density..))+
+geom_histogram(fill=sd.colors[1],bins=20, alpha=.5)+
+geom_density(color=sd.colors[1])
+
+p2 <- ggplot(data[data$school_day == TRUE,], aes(x=demand, y= ..density..))+
+geom_histogram(fill=sd.colors[2],bins=20, alpha=.5)+
+geom_density(color=sd.colors[2])
+
+p3 <- ggplot(data, aes(x = demand , fill = school_day)) +
+geom_density(alpha = 0.5) +
+scale_fill_manual(values=sd.colors)
+
+figure1 <- multi_panel_figure(columns = 2, rows = 2, panel_label_type = "none")
+figure1 %<>%
+  fill_panel(p1, column = 1, row = 1) %<>%
+  fill_panel(p2, column = 2, row = 1) %<>%
+  fill_panel(p3, column = 1:2, row = 2)
+figure1
+```
+
+Regarding the school days feature, the differences are not as dramatic as with the holidays. Mean demand on school days is a little higher, but the variance does not differ by a lot.
+
+
+TIME SERIES RRP vs DEMAND BY YEAR
+
+```{r}
+coeff <- 2000
+df2015 <- subset(data, date < "2016-01-01 00:00:00")
+df2016 <- subset(data, date < "2017-01-01 00:00:00" & date >= "2016-01-01 00:00:00" )
+df2017 <- subset(data, date < "2018-01-01 00:00:00" & date >= "2017-01-01 00:00:00")
+df2018 <- subset(data, date < "2019-01-01 00:00:00" & date >= "2018-01-01 00:00:00")
+df2019 <- subset(data, date < "2020-01-01 00:00:00" & date >= "2019-01-01 00:00:00")
+df2020 <- subset(data, date < "2021-01-01 00:00:00" & date >= "2020-01-01 00:00:00")
+
+p2015 <- ggplot(df2015, aes(x=date)) +
+  geom_line( aes(y=RRP), color = 'red') + 
+  geom_line( aes(y=demand/coeff),color = 'blue') + 
+  scale_y_continuous(name = "RRP [AUD/MWH]",sec.axis = sec_axis(~.*coeff, name="Demand [MWH]")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+p2016 <- ggplot(df2016, aes(x=date)) +
+  geom_line( aes(y=RRP), color = 'red') + 
+  geom_line( aes(y=demand/coeff),color = 'blue') + 
+  scale_y_continuous(name = "RRP [AUD/MWH]",sec.axis = sec_axis(~.*coeff, name="Demand [MWH]")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+p2017 <- ggplot(df2017, aes(x=date)) +
+  geom_line( aes(y=RRP), color = 'red') + 
+  geom_line( aes(y=demand/coeff),color = 'blue') + 
+  scale_y_continuous(name = "RRP [AUD/MWH]",sec.axis = sec_axis(~.*coeff, name="Demand [MWH]")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+p2018 <- ggplot(df2018, aes(x=date)) +
+  geom_line( aes(y=RRP), color = 'red') + 
+  geom_line( aes(y=demand/coeff),color = 'blue') + 
+  scale_y_continuous(name = "RRP [AUD/MWH]",sec.axis = sec_axis(~.*coeff, name="Demand [MWH]")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+p2019 <- ggplot(df2019, aes(x=date)) +
+  geom_line( aes(y=RRP), color = 'red') + 
+  geom_line( aes(y=demand/coeff),color = 'blue') + 
+  scale_y_continuous(name = "RRP [AUD/MWH]",sec.axis = sec_axis(~.*coeff, name="Demand [MWH]")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+p2020 <- ggplot(df2020, aes(x=date)) +
+  geom_line( aes(y=RRP), color = 'red') + 
+  geom_line( aes(y=demand/coeff),color = 'blue') + 
+  scale_y_continuous(name = "RRP [AUD/MWH]",sec.axis = sec_axis(~.*coeff, name="Demand [MWH]")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+pfull <- ggplot(data, aes(x=date)) +
+  geom_line( aes(y=RRP), color = 'red') + 
+  geom_line( aes(y=demand/coeff),color = 'blue') + 
+  scale_y_continuous(name = "RRP [AUD/MWH]",sec.axis = sec_axis(~.*coeff, name="Demand [MWH]")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+figure1 <- multi_panel_figure(columns = 3, rows = 3, panel_label_type = "none")
+figure1 %<>%
+  fill_panel(p2015, column = 1, row = 1) %<>%
+  fill_panel(p2016, column = 2, row = 1) %<>%
+  fill_panel(p2017, column = 3, row = 1) %<>%
+  fill_panel(p2018, column = 1, row = 2) %<>%
+  fill_panel(p2019, column = 2, row = 2) %<>%
+  fill_panel(p2020, column = 3, row = 2) %<>%
+  fill_panel(pfull, column = 1:3, row = 3)
+figure1
+```
+
+
+MEAN TEMPERATURE vs DEMAND
+
+```{r}
+coeff <- 2000
+
+ggplot(data, aes(x=date)) +
+  geom_line( aes(y=mean_temperature), color = 'red') + 
+  geom_line( aes(y=demand/coeff),color = 'blue') + 
+  scale_y_continuous(name = "Mean Temperature",sec.axis = sec_axis(~.*coeff, name="Demand [MWH]")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+
+MEAN TEMPERATURE vs DEMAND
+```{r}
+
+p2015 <- ggplot(df2015, aes(x=date)) +
+  geom_line( aes(y=mean_temperature), color = 'red') + 
+  geom_line( aes(y=demand/coeff),color = 'blue') + 
+  scale_y_continuous(name = "mean tempoerature [°C]",sec.axis = sec_axis(~.*coeff, name="Demand [MWH]")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+p2016 <- ggplot(df2016, aes(x=date)) +
+  geom_line( aes(y=mean_temperature), color = 'red') + 
+  geom_line( aes(y=demand/coeff),color = 'blue') + 
+  scale_y_continuous(name = "mean tempoerature [°C]",sec.axis = sec_axis(~.*coeff, name="Demand [MWH]")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+p2017 <- ggplot(df2017, aes(x=date)) +
+  geom_line( aes(y=mean_temperature), color = 'red') + 
+  geom_line( aes(y=demand/coeff),color = 'blue') + 
+  scale_y_continuous(name = "mean tempoerature [°C]",sec.axis = sec_axis(~.*coeff, name="Demand [MWH]")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+p2018 <- ggplot(df2018, aes(x=date)) +
+  geom_line( aes(y=mean_temperature), color = 'red') + 
+  geom_line( aes(y=demand/coeff),color = 'blue') + 
+  scale_y_continuous(name = "mean tempoerature [°C]",sec.axis = sec_axis(~.*coeff, name="Demand [MWH]")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+p2019 <- ggplot(df2019, aes(x=date)) +
+  geom_line( aes(y=mean_temperature), color = 'red') + 
+  geom_line( aes(y=demand/coeff),color = 'blue') + 
+  scale_y_continuous(name = "mean tempoerature [°C]",sec.axis = sec_axis(~.*coeff, name="Demand [MWH]")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+p2020 <- ggplot(df2020, aes(x=date)) +
+  geom_line( aes(y=mean_temperature), color = 'red') + 
+  geom_line( aes(y=demand/coeff),color = 'blue') + 
+  scale_y_continuous(name = "mean tempoerature [°C]",sec.axis = sec_axis(~.*coeff, name="Demand [MWH]")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+pfull <- ggplot(data, aes(x=date)) +
+  geom_line( aes(y=mean_temperature), color = 'red') + 
+  geom_line( aes(y=demand/coeff),color = 'blue') + 
+  scale_y_continuous(name = "mean tempoerature [°C]",sec.axis = sec_axis(~.*coeff, name="Demand [MWH]")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+figure1 <- multi_panel_figure(columns = 3, rows = 3, panel_label_type = "none")
+figure1 %<>%
+  fill_panel(p2015, column = 1, row = 1) %<>%
+  fill_panel(p2016, column = 2, row = 1) %<>%
+  fill_panel(p2017, column = 3, row = 1) %<>%
+  fill_panel(p2018, column = 1, row = 2) %<>%
+  fill_panel(p2019, column = 2, row = 2) %<>%
+  fill_panel(p2020, column = 3, row = 2) %<>%
+  fill_panel(pfull, column = 1:3, row = 3)
+figure1
+
+```
+
+
+We proceed to separate the data on seasons (summer, autumn, winter, spring) as categorical values.
+
+```{r}
+data$month<-as.numeric(format(data$date,"%m"))
+data$season <- "summer"
+data$season[data$month>2 & data$month<6] <- "autumn"
+data$season[data$month>5 & data$month<9] <- "winter"
+data$season[data$month>8 & data$month<12] <- "spring"
+data$season<-factor(data$season,levels=c("summer","spring","winter","autumn"))
+summary(data$season)
+```
+DEMAND AND RRP BY SEASON
+
+RRP BY SEASON
+
+```{r}
+options(repr.plot.width=15, repr.plot.height=10)
+p1 <- ggplot(data, aes(x=season, y=RRP, group=season)) +
+  geom_boxplot(fill="pink") +
+  stat_summary(fun=mean, geom="point", color="blue") 
+
+p2 <- ggplot(data, aes(x=RRP, y=..count.., fill=season))+
+geom_density(alpha=0.3)
+
+figure1 <- multi_panel_figure(columns = 1, rows = 2, panel_label_type = "none")
+figure1 %<>%
+  fill_panel(p1, column = 1, row = 1) %<>%
+  fill_panel(p2, column = 1, row = 2)
+figure1
+
+```
+
+From the above graphs, we can see that RRP values are the highest in winter and the lowest in summer. As for spring and autumn, values don't differ a lot. Variance in all seasons is similar.
+
+We decide to continue the effect of the seasons, this time in the electricity demand.
+
+```{r}
+options(repr.plot.width=15, repr.plot.height=10)
+p1 <- ggplot(data, aes(x=season, y=demand, group=season)) +
+  geom_boxplot(fill="pink") +
+  stat_summary(fun=mean, geom="point", color="blue") 
+
+p2 <- ggplot(data, aes(x=demand, y=..count.., fill=season))+
+geom_density(alpha=0.3)
+
+figure1 <- multi_panel_figure(columns = 1, rows = 2, panel_label_type = "none")
+figure1 %<>%
+  fill_panel(p1, column = 1, row = 1) %<>%
+  fill_panel(p2, column = 1, row = 2)
+figure1
+
+```
+
+In the graphs shown above, it is clear that the demand on winter is higher than in the other seasons. Summer has the lowest demand comparatively, but it does not differ much from the spring and autumn ones. Variance of demand during summer is the highest.
+
+Next, we investigate the relations between temperature (min and max) and the other features, starting with RRP.
+
+```{r}
+
+
+p1 <- ggplot(data, aes(x=min_temperature, y=RRP)) +
+geom_jitter(alpha=0.5, size=0.7) +
+scale_color_manual("mediumorchid1") +
+geom_rug() +
+geom_smooth(method=lm, formula=y~x) +
+labs(title="Min Temperature x RRP") +
+theme(plot.title = element_text(size=10))
+
+p2 <- ggplot(data, aes(x=max_temperature, y=RRP)) +
+geom_jitter(alpha=0.5, size=0.7) +
+scale_color_manual("mediumorchid1") +
+geom_rug() +
+geom_smooth(method=lm, formula=y~x) +
+labs(title="Max Temperature x RRP") +
+theme(plot.title = element_text(size=10))
+
+
+options(repr.plot.width=5, repr.plot.height=60)
+layout <- "A \n B"
+p1+p2 + plot_layout(design = layout)
+
+```
+
+We can see that the relations of min and max temperature with RRP are extremely similar. Then, we move on to check the relations with demand.
+
+```{r}
+
+
+p1 <- ggplot(data, aes(x=min_temperature, y=demand)) +
+geom_jitter(alpha=0.5, size=0.7) +
+scale_color_manual("mediumorchid1") +
+geom_rug() +
+geom_smooth(method=lm, formula=y~x) +
+labs(title="Min Tmperature x Demand") +
+theme(plot.title = element_text(size=10))
+
+p2 <- ggplot(data, aes(x=max_temperature, y=demand)) +
+geom_jitter(alpha=0.5, size=0.7) +
+scale_color_manual("mediumorchid1") +
+geom_rug() +
+geom_smooth(method=lm, formula=y~x) +
+labs(title="Max Tmperature x Demand") +
+theme(plot.title = element_text(size=10))
+
+
+options(repr.plot.width=5, repr.plot.height=60)
+layout <- "A \n B "
+p1+p2+p3 + plot_layout(design = layout)
+
+```
+
+The similarity in relations here is a bit less than with RRP, but still existent. We proceed to check the relation between temperatures and solar exposure.
+
+```{r}
+
+p1 <- ggplot(data, aes(x=min_temperature, y=solar_exposure)) +
+geom_jitter(alpha=0.5, size=0.7) +
+scale_color_manual("mediumorchid1") +
+geom_rug() +
+geom_smooth(method=lm, formula=y~x) +
+labs(title="Min Temperature x Solar Exposure") +
+theme(plot.title = element_text(size=10))
+
+p2 <- ggplot(data, aes(x=max_temperature, y=solar_exposure)) +
+geom_jitter(alpha=0.5, size=0.7) +
+scale_color_manual("mediumorchid1") +
+geom_rug() +
+geom_smooth(method=lm, formula=y~x) +
+labs(title="Max Temperature x Solar_exposure") +
+theme(plot.title = element_text(size=10))
+
+
+options(repr.plot.width=5, repr.plot.height=60)
+layout <- "A \n B"
+p1+p2 + plot_layout(design = layout)
+
+```
+
+Here, they are extremely similar again. Finally, we check the relations between mean temperature with min and max temperature.
+
+
+```{r}
+p1 <- ggplot(data, aes(x=min_temperature, y=mean_temperature)) +
+geom_jitter(alpha=0.5, size=0.7) +
+scale_color_manual("mediumorchid1") +
+geom_rug() +
+geom_smooth(method=lm, formula=y~x) +
+labs(title="Min Temperature x Mean Temperature") +
+theme(plot.title = element_text(size=10))
+
+p2 <- ggplot(data, aes(x=max_temperature, y=mean_temperature)) +
+geom_jitter(alpha=0.5, size=0.7) +
+scale_color_manual("mediumorchid1") +
+geom_rug() +
+geom_smooth(method=lm, formula=y~x) +
+labs(title="Max Temperature x Mean Temperature") +
+theme(plot.title = element_text(size=10))
+
+
+options(repr.plot.width=5, repr.plot.height=60)
+layout <- "A \n B"
+p1+p2 + plot_layout(design = layout)
+
+```
+Again, the relations are extremely similar. From this analyses we conclude that the min and max temperature can be combined into one single mean temperature variable.
+
+Next, we check the correlation matrix in order to find potentially significant relations between variables. 
+
+CORRELATION MATRIX WITHOUT MAX AND MIN TEMPERATURE AND LOG(RAINFALL + 1)
+```{r}
+options(repr.plot.width=7, repr.plot.height=7)
+data$holiday= as.numeric(data$holiday)
+data$school_day = as.numeric(data$school_day)
+data$date = as.numeric(data$date)
+
+numerical <- subset(data, select = c(demand,
+                                     RRP,
+                                     mean_temperature,
+                                     solar_exposure,
+                                     rainfall,
+                                     school_day,
+                                     holiday
+                                     ))
+
+correlation <- cor(numerical)
+
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+corrplot(correlation, method="color", col=col(200),
+         type="upper", order="hclust",
+         addCoef.col = "black",
+         tl.col="black", tl.srt=45,
+         sig.level = 0.01, insig = "blank",
+         diag=FALSE,tl.cex=0.7, number.cex=0.6)
+```
+
+This correlation plot suggests that we start by analyzing the relation between demand and solar_exposure, and demand and holiday. The feature that has less correlation with demand is rainfall.
+
+
+## 4.1 Variable statistics
+
+In this part, we will test some hypotheses to further understand the effect of different variables on demand. From the previously performed EDA, we see that it is possible that the categorical variables have an effect on the electricity demand. In this section, we wish further investigate this.
+
+### 4.1.2 Hypothesis 1
+
+In this part, the equality of means of the demand on two categorical variables in the data set ("school_day" and "holiday") is going to be examined. Before checking the equality of the means, we check the equality of the variances. To do so, an F-test is going to be performed.
+
+$\sigma_{school}$ is the standard deviation of demand for school days and $\sigma_{notschool}$ is the standard deviation for the other days.
+
+In the density plot above, we see that the mean of the distribution of the demand on school days is higher than that on not school days.
+
+```{r}
+
+school_days <- data[data$school_day == TRUE,]$demand
+no_school_days <- data[data$school_day == FALSE,]$demand
+
+var.test(school_days, no_school_days , alternative="two.sided")
+```
+
+From this test, we can conclude that the variances of demand on school day vs not school days are not equal.
+
+Next, we proceed to test the equality of the variances of demand on holidays vs not holidays. We start by plotting the distributions, then an F-test will also be used for this purpose.
+
+
+From the plot above, it is clear that the distributions of demand on holidays vs not holidays are considerably different. Both mean and variance on not holidays are greater than on holidays.
+
+```{r}
+holidays <- data[data$holiday == TRUE,]$demand
+no_holidays <- data[data$holiday == FALSE,]$demand
+
+var.test(holidays, no_holidays , alternative="two.sided")
+```
+
+### 4.1.3 Hypothesis 2
+
+We want to test whether the Covid-19 Pandemic policies had an effect on the electricity demand. For this, we perform a t-test and assume that the distribution is normal, since the sample size is big enough. To perform the t-test, first we need to check that the two populations have equal variance, so the F-statistic will be computed, using the standard deviation of the demands three months before and after Covid-19 lockdown policies were introduced.
+
+
+
+
+# 5 Model Data & Analysis
+
+In this section we will consider the effect of numerical variables on electricity demand. As we know from the correlation matrix performed during the EDA, the solar exposure (solar_exposure) has high correlation with demand. So, we start by building a linear regression model with only this variable.
+
+```{r}
+mod.num1 <- lm(data=data, demand ~ solar_exposure)
+summary(mod.num1)
+```
+
+```{r}
+
+BIC(mod.num1)
+
+```
+
+```{r}
+ggplot(data, aes(x = solar_exposure, y = demand)) +
+geom_point() +
+stat_smooth(method = "lm", formula = y ~ x) +
+labs(x = 'mean tempreture', y = 'demand')
+
+
+```
+
+```{r}
+
+# Diagnostic
+par(mfrow=c(2,2))
+plot(mod.num1)
+
+```
+
+Next, we evaluate the effect of adding mean temperature to the linear model.
+
+```{r}
+mod.num2 <- lm(data=data, demand ~ solar_exposure + mean_temperature)
+summary(mod.num2)
+
+```
+
+```{r}
+BIC(mod.num2)
+
+```
+
+```{r}
+# Diagnostic
+par(mfrow=c(2,2))
+plot(mod.num2)
+
+```
+
+In the second case the behavior of residuals do not change much but BIC is a little worse. We proceed to check the behavior of the model with only the mean temperature variable in order to have a better idea of the effect of this variable.
+
+```{r}
+
+mod.num3 <- lm(data=data, demand ~ mean_temperature)
+summary(mod.num3)
+
+```
+
+```{r}
+BIC(mod.num3)
+
+```
+
+```{r}
+# Diagnostic
+par(mfrow=c(2,2))
+plot(mod.num3)
+
+```
+
+```{r}
+ggplot(data, aes(x = mean_temperature, y = demand)) +
+geom_point() +
+stat_smooth(method = "lm", formula = y ~ x) +
+labs(x = 'mean tempreture', y = 'demand')
+
+
+```
+
+The behavior of mean temperature as seen above suggests that the squared value of the mean temperature can improve the model.
+
+```{r}
+
+mod.num4 <- lm(data=data, demand ~ poly(mean_temperature, 4))
+summary(mod.num4)
+
+```
+
+```{r}
+BIC(mod.num4)
+
+```
+
+```{r}
+# Diagnostic
+par(mfrow=c(2,2))
+plot(mod.num4)
+
+```
+
+```{r}
+ggplot(data, aes(x = mean_temperature, y = demand)) +
+geom_point() +
+stat_smooth(method = "lm", formula = y ~ poly(x, 4)) +
+labs(x = 'mean tempreture', y = 'demand')
+
+
+```
+
+We proceed to check the performance of this new model.
+
+```{r}
+mod.num5 <- lm(data=data, demand ~ solar_exposure + poly(mean_temperature, 4))
+summary(mod.num5)
+
+```
+
+```{r}
+BIC(mod.num5)
+
+```
+
+```{r}
+# Diagnostic
+par(mfrow=c(2,2))
+plot(mod.num5)
+
+```
+
+Since the model behavior improved, we keep the fourth degree term and go on to add another variable.
+
+```{r}
+mod.num6 <- lm(data=data, demand ~ solar_exposure + poly(mean_temperature, 4) + rainfall)
+summary(mod.num6)
+
+```
+
+```{r}
+BIC(mod.num6)
+
+```
+
+```{r}
+# Diagnostic
+par(mfrow=c(2,2))
+plot(mod.num6)
+
+```
+
+Now, we check the behavior of the model with only the rainfall variable.
+
+```{r}
+mod.num7 <- lm(data=data, demand ~  rainfall)
+summary(mod.num7)
+
+```
+
+```{r}
+BIC(mod.num7)
+
+```
+
+```{r}
+# Diagnostic
+par(mfrow=c(2,2))
+plot(mod.num7)
+
+```
+
+```{r}
+ggplot(data, aes(x = rainfall, y = demand)) +
+geom_point() +
+stat_smooth(method = "lm", formula = y ~ x) +
+labs(x = 'rainfall', y = 'demand')
+
+
+```
+
+We see that the model may perform better if the rainfall variable is transformed to a logarithm.
+
+```{r}
+
+data$log_rainfall <- log(data$rainfall+1)
+
+
+```
+
+```{r}
+
+mod.num8 <- lm(data=data, demand ~ log_rainfall)
+summary(mod.num8)
+
+```
+
+```{r}
+BIC(mod.num8)
+
+```
+
+```{r}
+# Diagnostic
+par(mfrow=c(2,2))
+plot(mod.num8)
+
+```
+
+```{r}
+ggplot(data, aes(x = log_rainfall, y = demand)) +
+geom_point() +
+stat_smooth(method = "lm", formula = y ~ x) +
+labs(x = 'rainfall', y = 'demand')
+
+
+```
+
+Indeed, after the logarithmic transformation, the shape of the model fits better. We add this new variable to the model and see the impact it has.
+
+```{r}
+mod.num9 <- lm(data=data, demand ~ solar_exposure + poly(mean_temperature, 4) + log_rainfall)
+summary(mod.num9)
+
+```
+
+```{r}
+BIC(mod.num9)
+
+```
+
+```{r}
+# Diagnostic
+par(mfrow=c(2,2))
+plot(mod.num9)
+
+```
+
+The log version of the rainfall variable does not have a big impact on the model, but we keep it for now and will further analyze and decide afterwards.
+
+### Adding categorical variables
+
+```{r}
+mod.cat0 <- lm(demand ~ school_day + season + holiday, data=data)
+summary(mod.cat0)
+
+```
+
+```{r}
+summary(mod.cat0)$adj.r.squared
+
+```
+
+```{r}
+BIC(mod.cat0)
+
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(mod.cat0)
+```
+
+From now we remove the variable which gives us the model with highest Adjusted R2:
+
+first of all holiday:
+
+```{r}
+mod.cat1 <- lm(demand ~ school_day + season , data=data)
+summary(mod.cat1)
+
+```
+
+```{r}
+summary(mod.cat1)$adj.r.squared
+
+```
+
+```{r}
+BIC(mod.cat1)
+
+```
+
+and now we remove the school day:
+
+```{r}
+mod.cat2 <- lm(demand ~ holiday + season , data=data)
+summary(mod.cat2)
+
+```
+
+```{r}
+summary(mod.cat2)$adj.r.squared
+
+```
+
+```{r}
+BIC(mod.cat2)
+
+```
+
+and now we remove the season:
+
+```{r}
+mod.cat3 <- lm(demand ~ holiday + school_day , data=data)
+summary(mod.cat3)
+
+```
+
+```{r}
+summary(mod.cat3)$adj.r.squared
+
+```
+
+```{r}
+BIC(mod.cat3)
+
+```
+
+and now we remove the season and holiday:
+
+```{r}
+mod.cat4 <- lm(demand ~ school_day , data=data)
+summary(mod.cat4)
+
+```
+
+```{r}
+summary(mod.cat4)$adj.r.squared
+
+```
+
+```{r}
+BIC(mod.cat4)
+
+```
+
+and now we remove the season and school day:
+
+```{r}
+mod.cat5 <- lm(demand ~ holiday , data=data)
+summary(mod.cat5)
+
+```
+
+```{r}
+summary(mod.cat5)$adj.r.squared
+
+```
+
+```{r}
+BIC(mod.cat5)
+
+```
+
+and now we remove the holiday and school day:
+
+```{r}
+mod.cat6 <- lm(demand ~ season , data=data)
+summary(mod.cat6)
+
+```
+
+```{r}
+summary(mod.cat6)$adj.r.squared
+
+```
+
+```{r}
+BIC(mod.cat6)
+
+```
+
+### Whole model
+
+```{r}
+mod.tot0 <- lm(demand ~ solar_exposure + poly(mean_temperature, 4) + log_rainfall +season + school_day + holiday , data=data)
+summary(mod.tot0)
+
+```
+
+```{r}
+
+BIC(mod.tot0)
+
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(mod.tot0)
+
+```
+
+## 5.2 Accuracy metrics
+
+
+
+# 6 Model Evaluation
+
+# 7 Conclusion
 
 You can also embed plots, for example:
 
