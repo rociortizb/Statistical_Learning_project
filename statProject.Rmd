@@ -89,6 +89,14 @@ if (!require(PerformanceAnalytics)) {
     install.packages("PerformanceAnalytics")
     require(PerformanceAnalytics)
 }
+if (!require(pROC)) {
+    install.packages("pROC")
+    require(pROC)
+}
+if (!require(knitr)) {
+    install.packages("knitr")
+    require(knitr)
+}
 
 library(patchwork)
 library(magrittr)
@@ -110,17 +118,19 @@ library(fastDummies)
 library(hrbrthemes)
 library(viridis)
 library(forcats)
+library(pROC)
+library(knitr)
 
 #library(PerformanceAnalytics)
 ```
 
 # 1 Introduction
 
-Electricity is essential in people's daily life, and prediction of its demand can play a critical role for policy makers, public and private investors to formulate optimal electricity supply plans of power generation and supporting infrastructure. However, it is not straightforward to achieve prediction accuracy and reliability due to the presence of many variables, such as solar exposure, daily minimum and maximum temperatures, etc. Thus, the aim of this project is to build a model that takes into account the factors that influence demand the most, by firstly exploring the data in depth in order to find correlations between variables, and secondly building a prediction model with enough accuracy and efficiency.
+Electricity is essential in people's daily life, and prediction of its demand can play a critical role for policy makers, public and private investors to formulate optimal electricity supply plans of power generation and supporting infrastructure. However, it is not straightforward to achieve prediction accuracy and reliability due to the presence of many variables, such as solar exposure, daily temperatures, etc. Thus, the aim of this project is to build a model that takes into account the factors that influence demand the most, by firstly exploring the data in depth in order to find correlations between variables, and secondly building a prediction model with enough accuracy and efficiency. Additionally, we will build a classification model to predict when RRP (Recommended Retail Price) will be high or low.
 
 # 2 Objectives
 
-The main objective of this project is to build a model to predict electricity demand based on different variables. Then, to perform a deep analysis of these variables. Furthermore, we would like to determine how the change of seasons affect demand every year, and also the effect the first stages of the Covid-19 pandemic policies had on it. Finally, we will interpret our findings in order to draw useful insights from the data and results.
+The main objective of this project is to build a model to predict electricity demand based on different variables. Then, to perform a deep analysis of these variables. Furthermore, we would like to determine how the change of seasons affect demand every year, and also the effect the that school days and holidays have on it. Furthermore, we want to build a classification model to predict when RRP will be high or low. Finally, we will interpret our findings in order to draw useful insights from the data and results.
 
 # 3 Data Collection
 
@@ -145,7 +155,7 @@ The variables present on our dataset are:
 -   school_day: whether students were at school on that day;
 -   holiday: whether the day was a holiday.
 
-It is worth noting that the RRP is calculated considering different components such as wholesale costs, network charges, and retail margin, all information which we do not have access too. Furthermore, the RRP will depend strongly on demand, and that is why we choose to focus on demand instead and will not consider the RRP related columns when building our model.
+It is worth noting that the RRP is calculated considering different components such as wholesale costs, network charges, and retail margin, all information which we do not have access too. Furthermore, the RRP will depend strongly on demand, and that is why we choose not to consider the RRP related features when building our model.
 
 
 ```{r}
@@ -251,7 +261,7 @@ labs(x ="RRP", y="Count")
 
 ```
 
-The above histogram of the RRP shows an extremely long right tail, especially when compared to the left tail. This is probably due to outliers, so we decide to further investigate this.
+The above histogram of the RRP shows an extremely long right tail, especially when compared to the left tail. This indicates the presence of outliers, so we decide to further investigate this.
 
 
 ```{r}
@@ -264,7 +274,7 @@ data_ol <- subset(data, data$RRP >= Q[4]+1.5*(Q[4]-Q[2]) | data$RRP<= Q[2]-1.5*(
 dim(data_ol)
 
 ```
-Indeed, there are 28 outlier values for the RRP variable. Since these differ excessively from the rest, and they are not the variable of our main interest, we remove them and check the new distribution without them.
+Indeed, there are 28 outliers for the RRP variable. Since these differ excessively from the rest, and they are not the variable of our main interest, we remove them and check the new distribution without them.
 
 
 ```{r}
@@ -481,25 +491,11 @@ figure1 %<>%
   fill_panel(pfull, column = 1:3, row = 3)
 figure1
 ```
-The above graphs show that while demand does not fluctuate much over the years, RRP does shift considerably during and throughout the years. There there was a notable peak in RRP around 2017 that lasted until almost 2020, when it went down again.
+The above graphs show that while demand does not fluctuate much over the years, RRP does shift considerably during and throughout the years. There there was a notable peak in RRP around 2017 that lasted until almost 2020, when it went down again. Furthermore, it is shown that around the time Covid-19 related measures were put in place (March 2020), behavior of demand did not change.
 
 We move on to visualize the evolution of mean temperature and demand throughout the years.
 
-```{r}
-coeff <- 2000
 
-ggplot(data, aes(x=date)) +
-  geom_line( aes(y=mean_temperature), color = 'red') + 
-  geom_line( aes(y=demand/coeff),color = 'blue') + 
-  scale_y_continuous(name = "Mean Temperature",sec.axis = sec_axis(~.*coeff, name="Demand")) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.line.y.right = element_line(color = "blue"),
-        axis.line.y.left = element_line(color = "red"))
-```
-
-From the above graph, it is very clear that when mean temperature peaks, demand goes down and viceversa. This suggests that more electricity is used when the weather is colder.
-
-MEAN TEMPERATURE vs DEMAND
 ```{r}
 
 p2015 <- ggplot(df2015, aes(x=date)) +
@@ -580,7 +576,7 @@ figure1
 
 ```
 
-The same can be concluded from the above graphs.As temperature goes down, demand rises.
+From the above graph, it is clear that when mean temperature peaks, demand goes down and viceversa. This indicates that more electricity is used when the weather is colder.
 
 We proceed to separate the data on seasons (summer, autumn, winter, spring) as categorical values.
 
@@ -745,15 +741,43 @@ p1+p2 + plot_layout(design = layout)
 ```
 Again, the relations are extremely similar. From this analyses we conclude that the min and max temperature can be combined into one single mean temperature variable.
 
+We move on to investigate the effect of rainfall in both electricity demand and RRP.
+
+```{r}
+
+
+p1 <- ggplot(data, aes(x=rainfall, y=demand)) +
+geom_jitter(alpha=0.5, size=0.7) +
+scale_color_manual("mediumorchid1") +
+geom_rug() +
+geom_smooth(method=lm, formula=y~x) +
+labs(title="Demand x rainfall") +
+theme(plot.title = element_text(size=10))
+
+p2 <- ggplot(data, aes(x=rainfall, y=RRP)) +
+geom_jitter(alpha=0.5, size=0.7) +
+scale_color_manual("mediumorchid1") +
+geom_rug() +
+geom_smooth(method=lm, formula=y~x) +
+labs(title="RRP x rainfall") +
+theme(plot.title = element_text(size=10))
+
+options(repr.plot.width=5, repr.plot.height=60)
+layout <- "A \n B"
+p1+p2+plot_layout(design = layout)
+```
+The above graphs indicate that as rainfall increases, demand and RRP decrease, although not much.
+
 Next, we check the correlation matrix in order to find potentially significant relations between variables. 
 
 ```{r}
+data_copy <- copy(data)
 options(repr.plot.width=7, repr.plot.height=7)
-data$holiday= as.numeric(data$holiday)
-data$school_day = as.numeric(data$school_day)
-data$date = as.numeric(data$date)
+data_copy$holiday= as.numeric(data_copy$holiday)
+data_copy$school_day = as.numeric(data_copy$school_day)
+data_copy$date = as.numeric(data_copy$date)
 
-numerical <- subset(data, select = c(demand,
+numerical <- subset(data_copy, select = c(demand,
                                      RRP,
                                      mean_temperature,
                                      solar_exposure,
@@ -766,7 +790,7 @@ correlation <- cor(numerical)
 
 col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
 corrplot(correlation, method="color", col=col(200),
-         type="upper", order="hclust",
+         type="upper",
          addCoef.col = "black",
          tl.col="black", tl.srt=45,
          sig.level = 0.01, insig = "blank",
@@ -786,6 +810,10 @@ The equality of means of the demand on school days and non-school days is going 
 
 $\sigma_{school}$ is the standard deviation of demand for school days and $\sigma_{notschool}$ is the standard deviation for the other days.
 
+* $H_{0}$: $\sigma_{school}$ $\neq$ $\sigma_{notschool}$
+* $H_{1}$: $\sigma_{school}$ $\neq$ $\sigma_{notschool}$
+
+
 ```{r}
 
 school_days <- data[data$school_day == TRUE,]$demand
@@ -794,14 +822,26 @@ no_school_days <- data[data$school_day == FALSE,]$demand
 var.test(school_days, no_school_days , alternative="two.sided")
 ```
 
-From this test, we can conclude that the variances of demand on school day vs not school days are not equal.
+We cannot perform a t-test to analyze the equality of the mean, since we do not have evidence to conclude that the variances of demand on school day vs not school days are equal. This is not surprising, given that the data is very unbalanced: 
+
+```{r}
+bplot2 <- barplot(table(data$school_day),
+            main="School days",
+            ylab="Count",
+            density=10
+            )
+
+```
 
 
 ### 4.1.2 Hypothesis 2
 
 We want to examine the equality of means of the demand on holidays and non-holidays. As before, we have to check the equality of the variances before carrying out the t-test.
 
-$\sigma_{school}$ is the standard deviation of demand for school days and $\sigma_{notschool}$ is the standard deviation for the other days.
+$\sigma_{holiday}$ is the standard deviation of demand for holidays and $\sigma_{notholiday}$ is the standard deviation for the other days.
+
+* $H_{0}$: $\sigma_{holiday}$ $\neq$ $\sigma_{notholiday}$
+* $H_{1}$: $\sigma_{holiday}$ $\neq$ $\sigma_{notholiday}$
 
 ```{r}
 holidays <- data[data$holiday == TRUE,]$demand
@@ -810,25 +850,34 @@ no_holidays <- data[data$holiday == FALSE,]$demand
 var.test(holidays, no_holidays , alternative="two.sided")
 ```
 
-Again, we conclude that the variances of the two populations are not equal.
+Again, we cannot conclude that the variances of the two populations are equal and thus we cannot perform a t-test. Once more, this is not surprising, since in this case the data is even more severely unbalanced:
 
-### 4.1.3 Hypothesis 3
+```{r}
 
-We want to test whether the Covid-19 Pandemic policies had an effect on the electricity demand. For this, we perform a t-test and assume that the distribution is normal, since the sample size is big enough. To perform the t-test, first we need to check that the two populations have equal variance, so the F-statistic will be computed, using the standard deviation of the demands three months before and after Covid-19 lockdown policies were introduced.
+bplot1 <- barplot(table(data$holiday),
+            main="Holiday",
+            ylab="Count",
+            density=10
+            )
 
-
+```
 
 
 # 5 Model Data & Analysis
 
-In this section we will consider the effect of numerical variables on electricity demand. As we know from the correlation matrix performed during the EDA, the solar exposure (solar_exposure) has high correlation with demand. So, we start by building a linear regression model with only this variable.
+## 5.1 Linear Regression Model
+
+### 5.1.1 Numerical variables
+
+In this section we will consider the effect of numerical variables on electricity demand. As we know from the correlation matrix performed during the EDA, the solar exposure (solar_exposure) has high correlation with demand. So, we start by building a linear regression model with only this variable. Performance in this section will be analyzed in terms of BIC ((Bayesian Information Criterion).
+
 
 ```{r}
 mod.num1 <- lm(data=data, demand ~ solar_exposure)
 summary(mod.num1)
 ```
 
-The BIC (Bayesian Information Criterion) for this simple model is the following:
+The BIC for this simple model is the following:
 
 ```{r}
 
@@ -846,13 +895,11 @@ plot(mod.num1)
 
 The behavior of the model is acceptable, since residuals are constant and normally distributed.
 
-Next, we build a linear model for demand with only the mean temperature variable.
-
 ```{r}
 ggplot(data, aes(x = solar_exposure, y = demand)) +
 geom_point() +
 stat_smooth(method = "lm", formula = y ~ x) +
-labs(x = 'mean tempreture', y = 'demand')
+labs(x = 'solar_exposure', y = 'demand')
 
 
 ```
@@ -1075,9 +1122,9 @@ plot(mod.num9)
 
 The log version of the rainfall variable does not have a big impact on the model, but we keep it for now and will further analyze and decide afterwards.
 
-### Adding categorical variables
+### 5.1.2 Adding categorical variables
 
-Next, we build a model considering only the categorical variables.
+Next, we build a model considering only the categorical variables. We start considering all three of them.
 
 ```{r}
 mod.cat0 <- lm(demand ~ school_day + season + holiday, data=data)
@@ -1100,7 +1147,7 @@ par(mfrow=c(2,2))
 plot(mod.cat0)
 ```
 
-We start removing variables to find the model which gives the highest Adjusted R squared. We start with holiday:
+Next, since they are not many, we try all possible combinations of the variables to find the model which results in the best performance in terms of BIC and Adjusted * $R^{2}$. We start with a combination of the school day and season features.
 
 ```{r}
 mod.cat1 <- lm(demand ~ school_day + season , data=data)
@@ -1118,7 +1165,7 @@ BIC(mod.cat1)
 
 ```
 
-Next, we remove the school day:
+Next, we combine the holiday and season features.
 
 ```{r}
 mod.cat2 <- lm(demand ~ holiday + season , data=data)
@@ -1136,7 +1183,7 @@ BIC(mod.cat2)
 
 ```
 
-Then, we remove the season:
+Then, we try a combination of the holiday and school day features.
 
 ```{r}
 mod.cat3 <- lm(demand ~ holiday + school_day , data=data)
@@ -1154,7 +1201,7 @@ BIC(mod.cat3)
 
 ```
 
-We move on to remove season and holiday:
+We move on to consider only school day.
 
 ```{r}
 mod.cat4 <- lm(demand ~ school_day , data=data)
@@ -1172,7 +1219,7 @@ BIC(mod.cat4)
 
 ```
 
-Then we remove season and school day:
+Next, we only consider holiday.
 
 ```{r}
 mod.cat5 <- lm(demand ~ holiday , data=data)
@@ -1190,7 +1237,7 @@ BIC(mod.cat5)
 
 ```
 
-And finally we remove holiday and school day:
+Finally, we consider only the season feature.
 
 ```{r}
 mod.cat6 <- lm(demand ~ season , data=data)
@@ -1208,7 +1255,23 @@ BIC(mod.cat6)
 
 ```
 
-### Whole model
+```{r, echo=FALSE}
+
+variables <- c('school day/season/holiday', 'school day/season', 'season/holiday', 'school day/holiday', 'school day', 'holiday', 'season')
+BIC <- c(44616.54, 44724.16, 44626.09, 45166.55, 45274.07, 45181.64, 44750.67)
+adjusted_R2 <- c(0.2953041, 0.2553871, 0.2897857, 0.07244284, 0.01995818, 0.0626738, 0.2433993)
+
+tdf <- data.frame(variables, BIC, adjusted_R2)
+kable(tdf, type='latex')
+
+
+```
+
+After comparing the BIC and Adjusted * $R^{2}$ for all the different models, we conclude that the best model performance is achieved when considering all three categorical variables. These metric do not change much when removing the school feature, but we keep it for now and will decide in the following section.
+
+### 5.1.3 Unified model
+
+Combining all the numerical and categorical variables we get the following model:
 
 ```{r}
 mod.tot0 <- lm(demand ~ solar_exposure + poly(mean_temperature, 4) + log_rainfall + season + school_day + holiday , data=data)
@@ -1227,19 +1290,339 @@ par(mfrow=c(2,2))
 plot(mod.tot0)
 
 ```
+Behavior of the residuals is acceptable. We move on to build a new model, this time without considering the rainfall and school day variables, which as seen previously resulted in the least improvements on performance. Furthermore, we remove the holiday feature, as it is severely unbalanced.
 
-## 5.2 Accuracy metrics
+```{r}
+mod.tot1 <- lm(demand ~ solar_exposure + poly(mean_temperature, 4) + season, data=data)
+summary(mod.tot1)
 
+```
+```{r}
+
+BIC(mod.tot1)
+
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(mod.tot1)
+
+```
+The BIC and Adjusted * $R^{2}$ did not deteriorate much when removing the two features. Behavior of the residuals also did not change much for this new model.
+
+## 5.2 Logistic Regression
+
+In this section we will build a logistic regression model in order to classify RRP as high or not, depending on whether it is above or below the median. To measure performance we will compare the different AUC (Area Under the Curve).
+
+
+```{r}
+attach(data)
+head(data)
+data$month <- as.factor(data$month)
+
+
+#add the high RRP column
+data$high_RRP <- TRUE
+data$high_RRP[data$RRP <= median(data$RRP)] <- FALSE
+
+#split in validation and train sets
+dt = sort(sample(nrow(data), nrow(data)*.7))
+train<-data[dt,]
+test<-data[-dt,]
+
+train$source <- "train"
+test$source<- "test"
+
+toplot <- rbind(train,test) 
+
+# create a dataset
+high_RRP <- c(TRUE, TRUE, FALSE, FALSE )
+condition <- c("train" , "test", "train", "test") 
+value <- c(table(toplot$source, toplot$high_RRP)[2,2], table(toplot$source, toplot$high_RRP)[1,2], table(toplot$source, toplot$high_RRP)[2,1], table(toplot$source, toplot$high_RRP)[1,1])
+toplot2 <- data.frame(high_RRP,condition,value)
+
+# Grouped
+ggplot(toplot2, aes(fill=condition, y=value, x=high_RRP)) + 
+  geom_bar(position="dodge", stat="identity")
+
+```
+
+The TRUE and FALSE labels are balanced in both the training and test sets.
+
+We build a first model considering all the variables:
+
+```{r}
+
+logit.out1 <- glm(high_RRP ~ demand + mean_temperature + solar_exposure + log(rainfall +1) + holiday + school_day + season, data = train, family = binomial)
+
+summary(logit.out1)
+```
+
+```{r}
+
+logistic.prob <- predict(logit.out1, type="response")
+roc.out <- roc(train$high_RRP, logistic.prob, levels=c(FALSE, TRUE))
+plot(roc.out, print.auc=TRUE, legacy.axes=TRUE, xlab="False positive rate", ylab="True positive rate")
+```
+
+
+COMPARING WITH A DUMMY DATASET
+```{r}
+th <- coords(roc.out, "best")
+probabilities <- logit.out1 %>% predict(test, type = "response")
+
+
+trivial.pred <- rep(FALSE, 623)
+logistic.pred <- rep(FALSE, 623)
+
+logistic.pred[probabilities>th[1,1]] <- TRUE
+
+CM <- table(logistic.pred, test$high_RRP)
+
+```
+
+Based on the P-values obtained from the previous model, we decide to remove the holiday feature, as it's the highest.
+
+
+```{r}
+logit.out2 <- glm(data$high_RRP ~ data$demand + data$mean_temperature + data$solar_exposure + data$rainfall+ data$school_day + data$season, family = binomial)
+
+summary(logit.out2)
+```
+```{r}
+logistic.prob <- predict(logit.out2, type="response")
+roc.out <- roc(data$high_RRP, logistic.prob, levels=c(FALSE, TRUE))
+
+plot(roc.out, print.auc=TRUE, legacy.axes=TRUE, xlab="False positive rate", ylab="True positive rate")
+print(coords(roc.out, "best"))
+```
+
+The AUC worsened with respect to the first model. Considering the P-values obtained through this new model, we decide to remove the solar exposure feature next.
+
+```{r}
+logit.out3 <- glm(data$high_RRP ~ data$demand + data$mean_temperature + data$rainfall+ data$school_day + data$season, family = binomial)
+
+summary(logit.out3)
+```
+
+
+```{r}
+logistic.prob <- predict(logit.out3, type="response")
+roc.out <- roc(data$high_RRP, logistic.prob, levels=c(FALSE, TRUE))
+
+plot(roc.out, print.auc=TRUE, legacy.axes=TRUE, xlab="False positive rate", ylab="True positive rate")
+print(coords(roc.out, "best"))
+```
+
+AUC improved a little with respect to the second model, but it is still worse than the first one. We proceed to remove the rainfall variable.
+
+```{r}
+logit.out4 <- glm(data$high_RRP ~ data$demand + data$mean_temperature + data$school_day + data$season, family = binomial)
+
+summary(logit.out4)
+```
+```{r}
+logistic.prob <- predict(logit.out4, type="response")
+roc.out <- roc(data$high_RRP, logistic.prob, levels=c(FALSE, TRUE))
+
+plot(roc.out, print.auc=TRUE, legacy.axes=TRUE, xlab="False positive rate", ylab="True positive rate")
+print(coords(roc.out, "best"))
+```
+Again, AUC worsened with respect to the previous model.
+
+Now we build a model without mean temperature:
+
+```{r}
+logit.out5 <- glm(data$high_RRP ~ data$demand + data$school_day + data$season, family = binomial)
+
+summary(logit.out5)
+```
+```{r}
+logistic.prob <- predict(logit.out5, type="response")
+roc.out <- roc(data$high_RRP, logistic.prob, levels=c(FALSE, TRUE))
+
+plot(roc.out, print.auc=TRUE, legacy.axes=TRUE, xlab="False positive rate", ylab="True positive rate")
+print(coords(roc.out, "best"))
+```
+
+AUC improved but not by much.
+
+Then, we try a model without considering the seasons:
+
+```{r}
+logit.out6 <- glm(data$high_RRP ~ data$demand + data$school_day , family = binomial)
+
+summary(logit.out6)
+```
+
+```{r}
+logistic.prob <- predict(logit.out6, type="response")
+roc.out <- roc(data$high_RRP, logistic.prob, levels=c(FALSE, TRUE))
+
+plot(roc.out, print.auc=TRUE, legacy.axes=TRUE, xlab="False positive rate", ylab="True positive rate")
+print(coords(roc.out, "best"))
+```
+
+Again, AUC worsened with respect to the previous model. Based on these results we should keep the logit.out5 model. 
+
+Now, we try to use the months as a feature instead of the seasons, and consider all the other initial variables:
+
+```{r}
+logit.out1 <- glm(high_RRP ~ demand + mean_temperature + solar_exposure + log(rainfall +1) + holiday + school_day + month, data = train, family = binomial)
+
+summary(logit.out1)
+```
+```{r}
+
+logistic.prob <- predict(logit.out1, type="response")
+roc.out <- roc(train$high_RRP, logistic.prob, levels=c(FALSE, TRUE))
+plot(roc.out, print.auc=TRUE, legacy.axes=TRUE, xlab="False positive rate", ylab="True positive rate")
+```
+
+As before, we proceed to remove the feature that had the highest P-value, which in this case is holiday.
+
+```{r}
+logit.out2 <- glm(high_RRP ~ demand + mean_temperature + school_day + month, data = train, family = binomial)
+
+summary(logit.out2)
+```
+
+```{r}
+
+logistic.prob <- predict(logit.out2, type="response")
+roc.out <- roc(train$high_RRP, logistic.prob, levels=c(FALSE, TRUE))
+plot(roc.out, print.auc=TRUE, legacy.axes=TRUE, xlab="False positive rate", ylab="True positive rate")
+```
+```{r}
+logit.out3 <- glm(high_RRP ~ demand + mean_temperature + school_day, data = train, family = binomial)
+
+summary(logit.out3)
+```
+```{r}
+
+logistic.prob <- predict(logit.out3, type="response")
+roc.out <- roc(train$high_RRP, logistic.prob, levels=c(FALSE, TRUE))
+plot(roc.out, print.auc=TRUE, legacy.axes=TRUE, xlab="False positive rate", ylab="True positive rate")
+```
+
+```{r}
+th <- coords(roc.out, "best")
+probabilities <- logit.out2 %>% predict(test, type = "response")
+
+
+trivial.pred <- rep(FALSE, 623)
+logistic.pred <- rep(FALSE, 623)
+
+logistic.pred[probabilities>th[1,1]] <- TRUE
+
+CM <- table(logistic.pred, test$high_RRP)
+
+CM
+
+```
 
 
 # 6 Model Evaluation
 
-# 7 Conclusion
+To evaluate the performance of our models, we will first compare the MSE (Mean Squared Errors) of the training set vs the test set, and then also use a 10-fold cross validation.
 
-You can also embed plots, for example:
+```{r}
+###split the data into train and test and see their error(MSE)
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+set.seed(1)
+n = dim(data)[1] #number of samples
+ntrain = floor(dim(data)[1]*0.8)  #1678 samples for test(80 percent of the data)
+
+train <- sample(1:n, size=ntrain, replace= FALSE) #index of training samples
+
+# linear model with training data
+mod.tot0.train <- lm(demand ~ solar_exposure + poly(mean_temperature, 4) + season , data=data , subset=train)
+
+#predict the demand of the test data based on fitted model
+y.pred <- predict(mod.tot0.train, newdata=data[-train, ])
+
+# mean squared error on training data
+MSE.train <- mean(residuals(mod.tot0.train)^2)
+MSE.train
+
+# mean squared error on test data
+MSE.val <- mean((data$demand[-train]-y.pred)^2)
+MSE.val
+
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+# k-fold cross-validation
+
+set.seed(1)
+k=10
+folds <- sample(1:k, nrow(data), replace=TRUE)
+#table(folds)
+
+cv.errors <- matrix(NA,k,1)
+colnames(cv.errors) <- 1
+
+
+for(j in 1:k){
+  best.fit <- lm(demand ~ solar_exposure + poly(mean_temperature, 4) +season, data=data[folds!=j,])
+  test.mat <- model.matrix(demand~solar_exposure + poly(mean_temperature, 4) + season, data=data[folds==j,])
+  y.pred <- predict(mod.tot0.train, newdata=data[folds==j,])
+  cv.errors[j,1] <- mean( (data$demand[folds==j]-y.pred)^2)
+  
+}
+
+mean.cv.errors <- apply(cv.errors,2,mean)
+mean.cv.errors
+
+```
+
+```{r}
+
+cv.errors <- cv.errors[1:10,1]
+tab <- matrix(cv.errors, ncol=1, byrow=TRUE)
+
+#define column names and row names of matrix
+colnames(tab) <- c("cv.errors")
+rownames(tab) <- c("1","2","3","4","5","6","7","8","9","10")
+
+tab <- as.table(tab)
+
+tab
+
+```
+```{r}
+
+crossval.table <- data.frame(folds = c(1:10),
+                   cross.validation.errors = cv.errors)
+crossval.table 
+
+```
+
+
+LOGISTIC REGRESSION
+TRIVIAL PREDICTION
+```{r}
+
+
+trivial.pred <- rep(FALSE, 623)
+
+CM <- table(trivial.pred, test$high_RRP)
+
+CM
+```
+
+ERROR RATE FROM TEST AND TRIVIAL PRECITOR
+```{r}
+
+print((145+198)/(145 + 121+ 159+ 198))
+
+print(304 / (319+304))
+```
+
+
+# 7 Conclusion
+
+The exploratory phase provided us with many useful insights and a framework to start producing our models. The model built for predicting demand captures how the different variables influence the outcome, but it is not a perfect predictor. We managed to improve the initial model that considered all variables by analyzing the effect that different features had and selecting them based on different performance metrics. As for the logistic regression model built to classify RRP as high or not, performance was just slightly better than a random classifier. In order to improve precision in this model, more features that are currently missing should be taken into account.
+
