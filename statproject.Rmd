@@ -1,16 +1,25 @@
 ---
-title: "statProject"
-## markdown file
-Autors: Mojtaba Amini, Javier Alberto Bernal Sigala, Carmen Rocio Ortiz Benitez, Saeed Soufeh
+title: "| ![](logo.png){width=2.3in} \\vspace{0.2in} \n  Daily Electricity Price and Demand Analysis\\vspace{0.2in} "
+subtitle: " Statistical learning Project\\vspace{0.4in}"
+date: "July 19, 2022"
+author: 
+- Mojtaba Amini 
+- Javier Alberto Bernal Sigala 
+- Carmen Rocio Ortiz Benitez 
+- Saeed Soufeh
+
+
+
 output: pdf_document
-date: '2022-05-20'
+
+
+params:
+  term: "July 2022"
 ---
 
 ```{=tex}
 \newpage
 \tableofcontents
-\listoffigures
-\listoftables
 ```
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -97,6 +106,10 @@ if (!require(knitr)) {
     install.packages("knitr")
     require(knitr)
 }
+if (!require(boot)) {
+    install.packages("boot")
+    require(boot)
+}
 
 library(patchwork)
 library(magrittr)
@@ -120,24 +133,30 @@ library(viridis)
 library(forcats)
 library(pROC)
 library(knitr)
-
+library(boot)
 
 #library(PerformanceAnalytics)
 ```
 
 # 1 Introduction
 
-Electricity is essential in people's daily life, and prediction of its demand can play a critical role for policy makers, public and private investors to formulate optimal electricity supply plans of power generation and supporting infrastructure. However, it is not straightforward to achieve prediction accuracy and reliability due to the presence of many variables, such as solar exposure, daily temperatures, etc. Thus, the aim of this project is to build a model that takes into account the factors that influence demand the most, by firstly exploring the data in depth in order to find correlations between variables, and secondly building a prediction model with enough accuracy and efficiency. Additionally, we will build a classification model to predict when RRP (Recommended Retail Price) will be high or low.
+Victoria is the second smallest state in surface, and the second most populous state in Australia, with a population of 6.7 million (in 2020) it is the state with the highest density. This state maintains an electricity consumption that corresponds to 21% of the entire country, especially in the capital, Melbourne (5 million). Aware that electricity is essential for people, in the following work we will try to draw conclusions about the demand and prices of electricity consumption of the inhabitants of Victoria using observation and statistical inference methods.
 
-# 2 Objectives
+Statistical inference is defined as the process of using data analysis to infer on the properties of an underlying distribution, in other contexts the concept of inference is used as "learning" or "training". Regression methods are a type of inference in which models are used to establish the relationship between a target variable and its predictor variables, these targets can belong to a normal distribution as in linear regression, to even a binomial as in logistic regression.
 
-The main objective of this project is to build a model to predict electricity demand based on different variables. Then, to perform a deep analysis of these variables. Furthermore, we would like to determine how the change of seasons affect demand every year, and also the effect the that school days and holidays have on it. Furthermore, we want to build a classification model to predict when RRP will be high or low. Finally, we will interpret our findings in order to draw useful insights from the data and results.
+Thus, the aim of this project is to build a regression model to predict demand that takes into account the factors that influence it the most, and secondly building a prediction model with enough accuracy and efficiency. Additionally, we will build a logistic regression model to classify whether RRP (Recommended Retail Price) will be high or low.
 
-# 3 Data Collection
+# 1.1 Objectives
 
-This dataset has 2,106 observations and 14 variables, and it is a record from January 2015 to December 2030 of daily electricity price and demand in the state of Victoria, Australia. It is available publicly (in <https://www.kaggle.com/datasets/aramacus/electricity-demand-in-victoria-australia>). Daily electricity may depend on different factors such as rainfall, solar exposure, whether it was a school day, etc; and also the correlations between them. It is easy to see how any of these variables could be meaningful in our analysis.
+* Explore the data in depth in order to understand relations between variables and their behavior.
+* Build a regression model to predict electricity demand.
+* Build a logistic regression model to classify the RRP as above or below the median.
 
-## 3.1 Variables description
+# 2 Data Collection
+
+This dataset has 2,106 observations and 14 variables, and it is a record from January 2015 to October 2020 of daily electricity price and demand in the state of Victoria, Australia. It is available publicly (in <https://www.kaggle.com/datasets/aramacus/electricity-demand-in-victoria-australia>). Daily electricity may depend on different factors such as rainfall, solar exposure, whether it was a school day, etc; and also the correlations between them. It is clear to see how any of these variables could be meaningful in our analysis.
+
+## 2.1 Variables description
 
 The variables present on our dataset are:
 
@@ -156,7 +175,7 @@ The variables present on our dataset are:
 -   school_day: whether students were at school on that day;
 -   holiday: whether the day was a holiday.
 
-It is worth noting that the RRP is calculated considering different components such as wholesale costs, network charges, and retail margin, all information which we do not have access too. Furthermore, the RRP will depend strongly on demand, and that is why we choose not to consider the RRP related features when building our model.
+It is worth noting that the RRP is calculated considering different components such as wholesale costs, network charges, and retail margin, all information which we do not have access too. Furthermore, the RRP and its related features (demand_pos_RRP, RRP_positive, demand_neg_RRP, RRP_negative, frac_at_neg_RRP) will depend strongly on demand and on each other, and that is why we choose not to consider them when building our model.
 
 
 ```{r}
@@ -166,7 +185,7 @@ summary(data)
 In terms of continuous variables, the values from the RRP 3rd quantile and the maximum differ excessively, which suggests that this might be an outlier. Furthermore, there are only 4 null values and they located in the solar_exposure and rainfall columns. Distribution of demand itself does not vary too much, with values ranging from around 85,000 MWh to 170,000 MWh.
 
 
-## 3.2 Data preparation
+## 2.2 Data preparation
 
 We check for "duplicate" rows and find there are none.
 
@@ -187,9 +206,10 @@ data <- data[!is.na(data$solar_exposure),]
 data <- data[!is.na(data$rainfall),]
 ```
 
-Next, we transform the date column from char to date, the min and max temperature into one combined mean temperature (because they are closely related to each other (collinear)), and the holiday and school_day columns from char to categorical (binary).
+Next, we transform the date column from char to date, the min and max temperature into one combined mean temperature, and the holiday and school_day columns from char to categorical (binary).
 
 ```{r}
+
 #convert the date
 data$date <- as.POSIXct(data$date)
 
@@ -214,8 +234,7 @@ data <- data %>%
 ```
 
 
-
-# 4 Exploratory Data Analysis (EDA)
+# 3 Exploratory Data Analysis (EDA)
 
 In this section we will use some visual tools to discover hidden trends and patterns in the dataset that can help us build an accurate and efficient model to make predictions on daily electricity demand.
 
@@ -275,7 +294,7 @@ data_ol <- subset(data, data$RRP >= Q[4]+1.5*(Q[4]-Q[2]) | data$RRP<= Q[2]-1.5*(
 dim(data_ol)
 
 ```
-Indeed, there are 28 outliers for the RRP variable. Since these differ excessively from the rest, and they are not the variable of our main interest, we remove them and check the new distribution without them.
+Indeed, there are 28 outliers for the RRP variable. These values differ excessively from the rest, which indicates there may have been an error when collecting the data. Furthermore, since the values are so great they will have a big impact other variables, thus we decide to remove these outliers.
 
 
 ```{r}
@@ -305,9 +324,31 @@ labs(x ="RRP", y="Count")
 
 ```
 
-As for the histogram, without the outliers, RRP is shown to have a bimodal distribution, with the most frequent values in the RRP axis around 40 and 85.
+As for the histogram, without the outliers, RRP is shown to have a bimodal distribution, with the most frequent values in the RRP axis around 40 and 85. This histogram is much more informative than the previous one.
 
 We proceed to analyse the relationship of some categorical variables with electricity demand.
+
+```{r}
+bplot2 <- barplot(table(data$school_day),
+            main="School days",
+            ylab="Count",
+            density=10
+            )
+
+```
+In the graph above, we can see that the data is unbalanced.
+
+```{r}
+
+bplot1 <- barplot(table(data$holiday),
+            main="Holiday",
+            ylab="Count",
+            density=10
+            )
+
+```
+
+In the above case, the data is even more severely unbalanced than the school days.
 
 ```{r}
 p1 <- ggplot(data, aes(x=demand)) +
@@ -341,6 +382,7 @@ p1+p2 +p3+ p4
 In the plots above, we can see that the distribution of electricity demand on its own is almost symmetrical. However, when plotted with relation to "holiday", the mean is much lower when the values are True, and also the variance is significantly smaller. As for demand plotted with respect to "school_day", demand is generally higher on school days.
 
 
+
 ```{r}
 options(repr.plot.width=15, repr.plot.height=5)
 sd.colors <- c("#999999", "#E69F00")
@@ -370,7 +412,7 @@ figure1 %<>%
 figure1
 ```
 
-As seen in the density graphs above, mean demand on holidays is much lower than on non-holidays, and the variance is also smaller. For non-holidays, daily demand values are less concentrated.
+As seen in the density graphs above, the difference in distributions in demand for holidays and non-holidays is evident. Mean demand on holidays is much lower than on non-holidays, and the variance is also smaller. For non-holidays, daily demand values are less concentrated.
 
 
 ```{r}
@@ -418,7 +460,8 @@ df2020 <- subset(data, date < "2021-01-01 00:00:00" & date >= "2020-01-01 00:00:
 p2015 <- ggplot(df2015, aes(x=date)) +
   geom_line( aes(y=RRP), color = 'red') + 
   geom_line( aes(y=demand/coeff),color = 'blue') + 
-  scale_y_continuous(name = "RRP",sec.axis = sec_axis(~.*coeff, name="Demand")) +
+  scale_y_continuous(name = "RRP",sec.axis = sec_axis(~.*coeff, 
+                                                      name="Demand")) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         axis.title.y = element_text(size = 7),
         axis.line.y.right = element_line(color = "blue"),
@@ -427,7 +470,8 @@ p2015 <- ggplot(df2015, aes(x=date)) +
 p2016 <- ggplot(df2016, aes(x=date)) +
   geom_line( aes(y=RRP), color = 'red') + 
   geom_line( aes(y=demand/coeff),color = 'blue') + 
-  scale_y_continuous(name = "RRP",sec.axis = sec_axis(~.*coeff, name="Demand")) +
+  scale_y_continuous(name = "RRP",sec.axis = sec_axis(~.*coeff, 
+                                                      name="Demand")) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         axis.title.y = element_text(size = 7),
         axis.line.y.right = element_line(color = "blue"),
@@ -436,7 +480,8 @@ p2016 <- ggplot(df2016, aes(x=date)) +
 p2017 <- ggplot(df2017, aes(x=date)) +
   geom_line( aes(y=RRP), color = 'red') + 
   geom_line( aes(y=demand/coeff),color = 'blue') + 
-  scale_y_continuous(name = "RRP",sec.axis = sec_axis(~.*coeff, name="Demand")) +
+  scale_y_continuous(name = "RRP",sec.axis = sec_axis(~.*coeff, 
+                                                      name="Demand")) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         axis.title.y = element_text(size = 7),
         axis.line.y.right = element_line(color = "blue"),
@@ -445,7 +490,8 @@ p2017 <- ggplot(df2017, aes(x=date)) +
 p2018 <- ggplot(df2018, aes(x=date)) +
   geom_line( aes(y=RRP), color = 'red') + 
   geom_line( aes(y=demand/coeff),color = 'blue') + 
-  scale_y_continuous(name = "RRP",sec.axis = sec_axis(~.*coeff, name="Demand")) +
+  scale_y_continuous(name = "RRP",sec.axis = sec_axis(~.*coeff, 
+                                                      name="Demand")) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         axis.title.y = element_text(size = 7),
         axis.line.y.right = element_line(color = "blue"),
@@ -454,7 +500,8 @@ p2018 <- ggplot(df2018, aes(x=date)) +
 p2019 <- ggplot(df2019, aes(x=date)) +
   geom_line( aes(y=RRP), color = 'red') + 
   geom_line( aes(y=demand/coeff),color = 'blue') + 
-  scale_y_continuous(name = "RRP",sec.axis = sec_axis(~.*coeff, name="Demand")) +
+  scale_y_continuous(name = "RRP",sec.axis = sec_axis(~.*coeff, 
+                                                      name="Demand")) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         axis.title.y = element_text(size = 7),
         axis.line.y.right = element_line(color = "blue"),
@@ -463,7 +510,8 @@ p2019 <- ggplot(df2019, aes(x=date)) +
 p2020 <- ggplot(df2020, aes(x=date)) +
   geom_line( aes(y=RRP), color = 'red') + 
   geom_line( aes(y=demand/coeff),color = 'blue') + 
-  scale_y_continuous(name = "RRP",sec.axis = sec_axis(~.*coeff, name="Demand")) +
+  scale_y_continuous(name = "RRP",sec.axis = sec_axis(~.*coeff, 
+                                                      name="Demand")) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         axis.title.y = element_text(size = 7),
         axis.line.y.right = element_line(color = "blue"),
@@ -473,7 +521,8 @@ p2020 <- ggplot(df2020, aes(x=date)) +
 pfull <- ggplot(data, aes(x=date)) +
   geom_line( aes(y=RRP), color = 'red') + 
   geom_line( aes(y=demand/coeff),color = 'blue') + 
-  scale_y_continuous(name = "RRP",sec.axis = sec_axis(~.*coeff, name="Demand")) +
+  scale_y_continuous(name = "RRP",sec.axis = sec_axis(~.*coeff, 
+                                                      name="Demand")) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         axis.line.y.right = element_line(color = "blue"),
         axis.line.y.left = element_line(color = "red"),
@@ -492,144 +541,8 @@ figure1 %<>%
   fill_panel(pfull, column = 1:3, row = 3)
 figure1
 ```
-The above graphs show that while demand does not fluctuate much over the years, RRP does shift considerably during and throughout the years. There there was a notable peak in RRP around 2017 that lasted until almost 2020, when it went down again. Furthermore, it is shown that around the time Covid-19 related measures were put in place (March 2020), behavior of demand did not change.
-
-We move on to visualize the evolution of mean temperature and demand throughout the years.
-
-
-```{r}
-
-p2015 <- ggplot(df2015, aes(x=date)) +
-  geom_line( aes(y=mean_temperature), color = 'red') + 
-  geom_line( aes(y=demand/coeff),color = 'blue') + 
-  scale_y_continuous(name = "mean tempoerature[°C]",sec.axis = sec_axis(~.*coeff, name="Demand")) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.title.y = element_text(size = 7),
-        axis.line.y.right = element_line(color = "blue"),
-        axis.line.y.left = element_line(color = "red"))+
-  labs(x = "2015 dates")
-p2016 <- ggplot(df2016, aes(x=date)) +
-  geom_line( aes(y=mean_temperature), color = 'red') + 
-  geom_line( aes(y=demand/coeff),color = 'blue') + 
-  scale_y_continuous(name = "mean tempoerature[°C]",sec.axis = sec_axis(~.*coeff, name="Demand")) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.title.y = element_text(size = 7),
-        axis.line.y.right = element_line(color = "blue"),
-        axis.line.y.left = element_line(color = "red"))+
-  labs(x = "2016 dates")
-p2017 <- ggplot(df2017, aes(x=date)) +
-  geom_line( aes(y=mean_temperature), color = 'red') + 
-  geom_line( aes(y=demand/coeff),color = 'blue') + 
-  scale_y_continuous(name = "mean tempoerature[°C]",sec.axis = sec_axis(~.*coeff, name="Demand")) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.title.y = element_text(size = 7),
-        axis.line.y.right = element_line(color = "blue"),
-        axis.line.y.left = element_line(color = "red"))+
-  labs(x = "2017 dates")
-p2018 <- ggplot(df2018, aes(x=date)) +
-  geom_line( aes(y=mean_temperature), color = 'red') + 
-  geom_line( aes(y=demand/coeff),color = 'blue') + 
-  scale_y_continuous(name = "mean tempoerature[°C]",sec.axis = sec_axis(~.*coeff, name="Demand")) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.title.y = element_text(size = 7),
-        axis.line.y.right = element_line(color = "blue"),
-        axis.line.y.left = element_line(color = "red"))+
-  labs(x = "2018 dates")
-p2019 <- ggplot(df2019, aes(x=date)) +
-  geom_line( aes(y=mean_temperature), color = 'red') + 
-  geom_line( aes(y=demand/coeff),color = 'blue') + 
-  scale_y_continuous(name = "mean tempoerature[°C]",sec.axis = sec_axis(~.*coeff, name="Demand")) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.title.y = element_text(size = 7),
-        axis.line.y.right = element_line(color = "blue"),
-        axis.line.y.left = element_line(color = "red"))+
-  labs(x = "2019 dates")
-p2020 <- ggplot(df2020, aes(x=date)) +
-  geom_line( aes(y=mean_temperature), color = 'red') + 
-  geom_line( aes(y=demand/coeff),color = 'blue') + 
-  scale_y_continuous(name = "mean tempoerature[°C]",sec.axis = sec_axis(~.*coeff, name="Demand")) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.title.y = element_text(size = 7),
-        axis.line.y.right = element_line(color = "blue"),
-        axis.line.y.left = element_line(color = "red"))+
-  labs(x = "2020 dates")
-
-pfull <- ggplot(data, aes(x=date)) +
-  geom_line( aes(y=mean_temperature), color = 'red') + 
-  geom_line( aes(y=demand/coeff),color = 'blue') + 
-  scale_y_continuous(name = "mean tempoerature[°C]",sec.axis = sec_axis(~.*coeff, name="Demand")) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.title.y = element_text(size = 7),
-        axis.line.y.right = element_line(color = "blue"),
-        axis.line.y.left = element_line(color = "red"))
-
-
-figure1 <- multi_panel_figure(columns = 3, rows = 3, panel_label_type = "none")
-figure1 %<>%
-  fill_panel(p2015, column = 1, row = 1) %<>%
-  fill_panel(p2016, column = 2, row = 1) %<>%
-  fill_panel(p2017, column = 3, row = 1) %<>%
-  fill_panel(p2018, column = 1, row = 2) %<>%
-  fill_panel(p2019, column = 2, row = 2) %<>%
-  fill_panel(p2020, column = 3, row = 2) %<>%
-  fill_panel(pfull, column = 1:3, row = 3)
-figure1
-
-```
-
-From the above graph, it is clear that when mean temperature peaks, demand goes down and viceversa. This indicates that more electricity is used when the weather is colder.
-
-We proceed to separate the data on seasons (summer, autumn, winter, spring) as categorical values.
-
-```{r}
-data$month<-as.numeric(format(data$date,"%m"))
-data$season <- "summer"
-data$season[data$month>2 & data$month<6] <- "autumn"
-data$season[data$month>5 & data$month<9] <- "winter"
-data$season[data$month>8 & data$month<12] <- "spring"
-data$season<-factor(data$season,levels=c("summer","spring","winter","autumn"))
-summary(data$season)
-```
-
-```{r}
-options(repr.plot.width=15, repr.plot.height=10)
-p1 <- ggplot(data, aes(x=season, y=RRP, group=season)) +
-  geom_boxplot(fill="pink") +
-  stat_summary(fun=mean, geom="point", color="blue") 
-
-p2 <- ggplot(data, aes(x=RRP, y=..count.., fill=season))+
-geom_density(alpha=0.3)
-
-figure1 <- multi_panel_figure(columns = 1, rows = 2, panel_label_type = "none")
-figure1 %<>%
-  fill_panel(p1, column = 1, row = 1) %<>%
-  fill_panel(p2, column = 1, row = 2)
-figure1
-
-```
-
-From the above graphs, we can see that RRP values are the highest in winter and the lowest in summer. As for spring and autumn, values don't differ a lot. Variance in all seasons is similar.
-
-We continue to investigate the effect of the seasons, this time in the electricity demand.
-
-```{r}
-options(repr.plot.width=15, repr.plot.height=10)
-p1 <- ggplot(data, aes(x=season, y=demand, group=season)) +
-  geom_boxplot(fill="pink") +
-  stat_summary(fun=mean, geom="point", color="blue") 
-
-p2 <- ggplot(data, aes(x=demand, y=..count.., fill=season))+
-geom_density(alpha=0.3)
-
-figure1 <- multi_panel_figure(columns = 1, rows = 2, panel_label_type = "none")
-figure1 %<>%
-  fill_panel(p1, column = 1, row = 1) %<>%
-  fill_panel(p2, column = 1, row = 2)
-figure1
-
-```
-
-In the graphs shown above, it is clear that the demand on winter is higher than in the other seasons. Summer has the lowest demand comparatively, but it does not differ much from the spring and autumn ones. Variance of demand during summer is the highest.
+The above graphs show that while demand does not fluctuate much over the years, RRP does shift considerably during and throughout the years. There there was a notable peak in RRP around 2017 that lasted until almost 2020, when it went down again. Furthermore,
+it is shown that around the time Covid-19 related measures were put in place (March 2020), behavior of demand did not change. Although we are interested in further investigating this, the available dataset did not provide any useful insights to do it.
 
 Next, we investigate the relations between temperature (min and max) and the other features, starting with RRP.
 
@@ -718,6 +631,7 @@ Here, they are extremely similar again. Finally, we check the relations between 
 
 
 ```{r}
+
 p1 <- ggplot(data, aes(x=min_temperature, y=mean_temperature)) +
 geom_jitter(alpha=0.5, size=0.7) +
 scale_color_manual("mediumorchid1") +
@@ -740,7 +654,148 @@ layout <- "A \n B"
 p1+p2 + plot_layout(design = layout)
 
 ```
-Again, the relations are extremely similar. From this analyses we conclude that the min and max temperature can be combined into one single mean temperature variable.
+
+Again, the relations are very similar. From this analyses we conclude that the min and max temperature can be combined into one single mean temperature variable.
+
+We move on to visualize the evolution of mean temperature and demand throughout the years.
+
+
+```{r}
+
+p2015 <- ggplot(df2015, aes(x=date)) +
+  geom_line( aes(y=mean_temperature), color = 'red') + 
+  geom_line( aes(y=demand/coeff),color = 'blue') + 
+  scale_y_continuous(name = "mean temperature[°C]",sec.axis = sec_axis(~.*coeff, name="Demand")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.y = element_text(size = 7),
+        axis.line.y.right = element_line(color = "blue"),
+        axis.line.y.left = element_line(color = "red"))+
+  labs(x = "2015 dates")
+p2016 <- ggplot(df2016, aes(x=date)) +
+  geom_line( aes(y=mean_temperature), color = 'red') + 
+  geom_line( aes(y=demand/coeff),color = 'blue') + 
+  scale_y_continuous(name = "mean temperature[°C]",sec.axis = sec_axis(~.*coeff, name="Demand")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.y = element_text(size = 7),
+        axis.line.y.right = element_line(color = "blue"),
+        axis.line.y.left = element_line(color = "red"))+
+  labs(x = "2016 dates")
+p2017 <- ggplot(df2017, aes(x=date)) +
+  geom_line( aes(y=mean_temperature), color = 'red') + 
+  geom_line( aes(y=demand/coeff),color = 'blue') + 
+  scale_y_continuous(name = "mean temperature[°C]",sec.axis = sec_axis(~.*coeff, name="Demand")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.y = element_text(size = 7),
+        axis.line.y.right = element_line(color = "blue"),
+        axis.line.y.left = element_line(color = "red"))+
+  labs(x = "2017 dates")
+p2018 <- ggplot(df2018, aes(x=date)) +
+  geom_line( aes(y=mean_temperature), color = 'red') + 
+  geom_line( aes(y=demand/coeff),color = 'blue') + 
+  scale_y_continuous(name = "mean temperature[°C]",sec.axis = sec_axis(~.*coeff, name="Demand")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.y = element_text(size = 7),
+        axis.line.y.right = element_line(color = "blue"),
+        axis.line.y.left = element_line(color = "red"))+
+  labs(x = "2018 dates")
+p2019 <- ggplot(df2019, aes(x=date)) +
+  geom_line( aes(y=mean_temperature), color = 'red') + 
+  geom_line( aes(y=demand/coeff),color = 'blue') + 
+  scale_y_continuous(name = "mean temperature[°C]",sec.axis = sec_axis(~.*coeff, name="Demand")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.y = element_text(size = 7),
+        axis.line.y.right = element_line(color = "blue"),
+        axis.line.y.left = element_line(color = "red"))+
+  labs(x = "2019 dates")
+p2020 <- ggplot(df2020, aes(x=date)) +
+  geom_line( aes(y=mean_temperature), color = 'red') + 
+  geom_line( aes(y=demand/coeff),color = 'blue') + 
+  scale_y_continuous(name = "mean temperature[°C]",sec.axis = sec_axis(~.*coeff, name="Demand")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.y = element_text(size = 7),
+        axis.line.y.right = element_line(color = "blue"),
+        axis.line.y.left = element_line(color = "red"))+
+  labs(x = "2020 dates")
+
+pfull <- ggplot(data, aes(x=date)) +
+  geom_line( aes(y=mean_temperature), color = 'red') + 
+  geom_line( aes(y=demand/coeff),color = 'blue') + 
+  scale_y_continuous(name = "mean temperature[°C]",sec.axis = sec_axis(~.*coeff, name="Demand")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.y = element_text(size = 7),
+        axis.line.y.right = element_line(color = "blue"),
+        axis.line.y.left = element_line(color = "red"))
+
+
+figure1 <- multi_panel_figure(columns = 3, rows = 3, panel_label_type = "none")
+figure1 %<>%
+  fill_panel(p2015, column = 1, row = 1) %<>%
+  fill_panel(p2016, column = 2, row = 1) %<>%
+  fill_panel(p2017, column = 3, row = 1) %<>%
+  fill_panel(p2018, column = 1, row = 2) %<>%
+  fill_panel(p2019, column = 2, row = 2) %<>%
+  fill_panel(p2020, column = 3, row = 2) %<>%
+  fill_panel(pfull, column = 1:3, row = 3)
+figure1
+
+```
+
+
+
+From the above graph, it is clear that when mean temperature peaks, demand goes down and viceversa. This indicates that more electricity is used when the weather is colder.
+
+
+We think that the behavior of demand may change depending on the seasons. To investigate this, we proceed to separate the data on seasons (summer, autumn, winter, spring) as categorical values.
+
+```{r}
+data$month<-as.numeric(format(data$date,"%m"))
+data$season <- "summer"
+data$season[data$month>2 & data$month<6] <- "autumn"
+data$season[data$month>5 & data$month<9] <- "winter"
+data$season[data$month>8 & data$month<12] <- "spring"
+data$season<-factor(data$season,levels=c("summer","spring","winter","autumn"))
+summary(data$season)
+```
+
+```{r}
+options(repr.plot.width=15, repr.plot.height=10)
+p1 <- ggplot(data, aes(x=season, y=RRP, group=season)) +
+  geom_boxplot(fill="pink") +
+  stat_summary(fun=mean, geom="point", color="blue") 
+
+p2 <- ggplot(data, aes(x=RRP, y=..count.., fill=season))+
+geom_density(alpha=0.3)
+
+figure1 <- multi_panel_figure(columns = 1, rows = 2, panel_label_type = "none")
+figure1 %<>%
+  fill_panel(p1, column = 1, row = 1) %<>%
+  fill_panel(p2, column = 1, row = 2)
+figure1
+
+```
+
+From the above graphs, we can see that RRP values are the highest in winter and the lowest in summer. As for spring and autumn, values don't differ a lot. Variance in all seasons is similar.
+
+We continue to investigate the effect of the seasons, this time in the electricity demand.
+
+```{r}
+options(repr.plot.width=15, repr.plot.height=10)
+p1 <- ggplot(data, aes(x=season, y=demand, group=season)) +
+  geom_boxplot(fill="pink") +
+  stat_summary(fun=mean, geom="point", color="blue") 
+
+p2 <- ggplot(data, aes(x=demand, y=..count.., fill=season))+
+geom_density(alpha=0.3)
+
+figure1 <- multi_panel_figure(columns = 1, rows = 2, panel_label_type = "none")
+figure1 %<>%
+  fill_panel(p1, column = 1, row = 1) %<>%
+  fill_panel(p2, column = 1, row = 2)
+figure1
+
+```
+
+In the graphs shown above, it is clear that the demand on winter is higher than in the other seasons. Summer has the lowest demand comparatively, but it does not differ much from the spring and autumn ones. Variance of demand during summer is the highest. Based on these insights, we conclude that using seasons as a categorical value provides useful information, and continue to do so.
 
 We move on to investigate the effect of rainfall in both electricity demand and RRP.
 
@@ -767,7 +822,66 @@ options(repr.plot.width=5, repr.plot.height=60)
 layout <- "A \n B"
 p1+p2+plot_layout(design = layout)
 ```
-The above graphs indicate that as rainfall increases, demand and RRP decrease, although not much.
+
+The above graphs indicate that as rainfall increases, demand and RRP decrease, although not much. The shape of the graph also indicates that doing a transformation will be beneficial, so we proceed to investigate the behavior of the logarithm of rainfall and add 1, to avoid errors when the rainfall is 0.
+
+```{r}
+
+data$log_rainfall <- log(data$rainfall+1)
+
+```
+
+```{r}
+
+p1 <- ggplot(data, aes(x=log_rainfall, y=demand)) +
+geom_jitter(alpha=0.5, size=0.7) +
+scale_color_manual("mediumorchid1") +
+geom_rug() +
+geom_smooth(method=lm, formula=y~x) +
+labs(title="Demand x log rainfall") +
+theme(plot.title = element_text(size=10))
+
+p2 <- ggplot(data, aes(x=log_rainfall, y=RRP)) +
+geom_jitter(alpha=0.5, size=0.7) +
+scale_color_manual("mediumorchid1") +
+geom_rug() +
+geom_smooth(method=lm, formula=y~x) +
+labs(title="RRP x log rainfall") +
+theme(plot.title = element_text(size=10))
+
+options(repr.plot.width=5, repr.plot.height=60)
+layout <- "A \n B"
+p1+p2+plot_layout(design = layout)
+```
+From the above graphs, we can see the after the transformation of rainfall, the effect in demand and RRP is still not significant, especially for demand. RRP decreases very slightly as log rainfall increases.
+
+Next, we plot some graphs to see the effect of solar exposure on demand.
+
+```{r}
+
+
+p1 <- ggplot(data, aes(x=solar_exposure, y=demand)) +
+geom_jitter(alpha=0.5, size=0.7) +
+scale_color_manual("mediumorchid1") +
+geom_rug() +
+geom_smooth(method=lm, formula=y~x) +
+labs(title="Demand x solar exposure") +
+theme(plot.title = element_text(size=10))
+
+p2 <- ggplot(data, aes(x=solar_exposure, y=RRP)) +
+geom_jitter(alpha=0.5, size=0.7) +
+scale_color_manual("mediumorchid1") +
+geom_rug() +
+geom_smooth(method=lm, formula=y~x) +
+labs(title="RRP x solar exposure") +
+theme(plot.title = element_text(size=10))
+
+options(repr.plot.width=5, repr.plot.height=60)
+layout <- "A \n B"
+p1+p2+plot_layout(design = layout)
+```
+As seen above, as solar exposure increases demand decreases. As for RRP, the effect of solar exposure is almost imperceptible.
+
 
 Next, we check the correlation matrix in order to find potentially significant relations between variables. 
 
@@ -801,17 +915,17 @@ corrplot(correlation, method="color", col=col(200),
 This correlation plot suggests that we start by analyzing the relation between demand and solar_exposure, and demand and holiday. The feature that has less correlation with demand is rainfall.
 
 
-## 4.1 Variable statistics
+## 3.1 Variable statistics
 
 In this part, we will test some hypotheses to further understand the effect of different variables on demand. From the previously performed EDA, we see that it is possible that the categorical variables have an effect on the electricity demand. In this section, we wish further investigate this.
 
-### 4.1.1 Hypothesis 1
+### 3.1.1 Hypothesis 1
 
 The equality of means of the demand on school days and non-school days is going to be examined. For this, we want to perform a t-test, and before checking the equality of the means, we have to check the equality of the variances. To do so, an F-test is going to be carried out first.
 
 $\sigma_{school}$ is the standard deviation of demand for school days and $\sigma_{notschool}$ is the standard deviation for the other days.
 
-* $H_{0}$: $\sigma_{school}$ $\neq$ $\sigma_{notschool}$
+* $H_{0}$: $\sigma_{school}$ $=$ $\sigma_{notschool}$
 * $H_{1}$: $\sigma_{school}$ $\neq$ $\sigma_{notschool}$
 
 
@@ -823,25 +937,16 @@ no_school_days <- data[data$school_day == FALSE,]$demand
 var.test(school_days, no_school_days , alternative="two.sided")
 ```
 
-We cannot perform a t-test to analyze the equality of the mean, since we do not have evidence to conclude that the variances of demand on school day vs not school days are equal. This is not surprising, given that the data is very unbalanced: 
-
-```{r}
-bplot2 <- barplot(table(data$school_day),
-            main="School days",
-            ylab="Count",
-            density=10
-            )
-
-```
+We cannot perform a t-test to analyze the equality of the mean, since we do not have evidence to conclude that the variances of demand on school day vs not school days are equal. This is not surprising, given that as seen in the EDA section, the data is very unbalanced.
 
 
-### 4.1.2 Hypothesis 2
+### 3.1.2 Hypothesis 2
 
 We want to examine the equality of means of the demand on holidays and non-holidays. As before, we have to check the equality of the variances before carrying out the t-test.
 
 $\sigma_{holiday}$ is the standard deviation of demand for holidays and $\sigma_{notholiday}$ is the standard deviation for the other days.
 
-* $H_{0}$: $\sigma_{holiday}$ $\neq$ $\sigma_{notholiday}$
+* $H_{0}$: $\sigma_{holiday}$ $=$ $\sigma_{notholiday}$
 * $H_{1}$: $\sigma_{holiday}$ $\neq$ $\sigma_{notholiday}$
 
 ```{r}
@@ -851,34 +956,78 @@ no_holidays <- data[data$holiday == FALSE,]$demand
 var.test(holidays, no_holidays , alternative="two.sided")
 ```
 
-Again, we cannot conclude that the variances of the two populations are equal and thus we cannot perform a t-test. Once more, this is not surprising, since in this case the data is even more severely unbalanced:
+Again, we cannot conclude that the variances of the two populations are equal and thus we cannot perform a t-test. Once more, this is not surprising, since in this case the data is even more severely unbalanced as previously seen on the EDA phase.
+
+
+# 4 Model Data & Analysis
+
+## 4.1 Linear Regression Model
+
+### 4.1.1 Numerical variables
+
+In this section we will consider the effect of numerical variables on electricity demand. As we know from the correlation matrix performed during the EDA, the solar exposure (solar_exposure) has high correlation with demand. So, we start by building a linear regression model with only this variable and continue by adding one variable at a time. Performance in this section will be analyzed in terms of BIC ((Bayesian Information Criterion) and Adjusted $R^{2}$.
+
+We start by building a model with only the solar exposure variable.
+
+```{r}
+mod.num0 <- lm(data=data, demand ~ solar_exposure)
+summary(mod.num0)
+```
 
 ```{r}
 
-bplot1 <- barplot(table(data$holiday),
-            main="Holiday",
-            ylab="Count",
-            density=10
-            )
+BIC(mod.num0)
 
 ```
 
+```{r}
 
-# 5 Model Data & Analysis
+# Diagnostic
+par(mfrow=c(2,2))
+plot(mod.num0)
 
-## 5.1 Linear Regression Model
+```
+The behavior of residuals seen above are admissible. We proceed to check the shape of this model.
 
-### 5.1.1 Numerical variables
+```{r}
+ggplot(data, aes(x = solar_exposure, y = demand)) +
+geom_point() +
+stat_smooth(method = "lm", formula = y ~ x) +
+labs(x = 'solar_exposure', y = 'demand')
 
-In this section we will consider the effect of numerical variables on electricity demand. As we know from the correlation matrix performed during the EDA, the solar exposure (solar_exposure) has high correlation with demand. So, we start by building a linear regression model with only this variable. Performance in this section will be analyzed in terms of BIC ((Bayesian Information Criterion).
+
+```
+From the above plot, we can see that our model may benefit by increasing the polynomial degree. After comparing different degree models, we find that the best performance is obtained by the fourth degree one, as confirmed by performing the following cross validation.
+
+```{r}
+#polynomial for solar exposure
+set.seed(1)
+cv.error.10.ex <- rep(0,10)
+for (i in 1:10){
+  glm.fit <- glm(demand~poly(solar_exposure,i),data=data)
+  cv.error.10.ex[i] <- cv.glm(data,glm.fit,K=10)$delta[1]
+}
+cv.error.10.ex
+
+expo.temp <- plot(1:10, cv.error.10.ex, type="b", xlab="degree", ylab="K-fold CV error for solar exposure")
+
+expo.temp
+```
 
 
 ```{r}
-mod.num1 <- lm(data=data, demand ~ solar_exposure)
+ggplot(data, aes(x = solar_exposure, y = demand)) +
+geom_point() +
+stat_smooth(method = "lm", formula = y ~ poly(x, 4)) +
+labs(x = 'solar_exposure', y = 'demand')
+
+
+```
+
+```{r}
+mod.num1 <- lm(data=data, demand ~ poly(solar_exposure, 4))
 summary(mod.num1)
 ```
-
-The BIC for this simple model is the following:
 
 ```{r}
 
@@ -893,22 +1042,15 @@ par(mfrow=c(2,2))
 plot(mod.num1)
 
 ```
+The behavior of the model is acceptable, since residuals are distributed uniformly across the fitted values, and our model has constant variance.
 
-The behavior of the model is acceptable, since residuals are constant and normally distributed.
+From the above plots, we conclude that keeping the solar exposure feature can be useful and thus we keep the feature in our model.
+
+Next, we evaluate the effect of adding mean temperature to the linear model.
+
 
 ```{r}
-ggplot(data, aes(x = solar_exposure, y = demand)) +
-geom_point() +
-stat_smooth(method = "lm", formula = y ~ x) +
-labs(x = 'solar_exposure', y = 'demand')
-
-
-```
-
-We evaluate the effect of adding mean temperature to the linear model.
-
-```{r}
-mod.num2 <- lm(data=data, demand ~ solar_exposure + mean_temperature)
+mod.num2 <- lm(data=data, demand ~ poly(solar_exposure, 4) + mean_temperature)
 summary(mod.num2)
 
 ```
@@ -924,7 +1066,9 @@ plot(mod.num2)
 
 ```
 
-In the second case the behavior of residuals does not change much but BIC is a little worse. We proceed to check the behavior of the model with only the mean temperature variable in order to have a better idea of the effect of this variable.
+For this model the behavior of residuals is still acceptable but BIC is a little worse. We proceed to check the behavior of the model with only the mean temperature variable in order to have a better idea of the effect of this variable.
+
+
 
 ```{r}
 
@@ -951,18 +1095,36 @@ The residual plot exhibits a U-shape, which indicates that the data is non-linea
 ggplot(data, aes(x = mean_temperature, y = demand)) +
 geom_point() +
 stat_smooth(method = "lm", formula = y ~ x) +
-labs(x = 'mean tempreture', y = 'demand')
+labs(x = 'mean temperature', y = 'demand')
 
 
 ```
 
-The behavior of mean temperature as seen above suggests that increasing the degree of the mean temperature variable can improve the model. We produce a fourth degree model:
+The behavior of mean temperature as seen above suggests that increasing the degree of the mean temperature variable can improve the model. By doing the cross validation, we see that the lowest error is achieved with degree four.
+
+```{r}
+#polynomial for mean_temperature
+set.seed(1)
+cv.error.10.tm <- rep(0,10)
+for (i in 1:10){
+  glm.fit <- glm(demand~poly(mean_temperature,i),data=data)
+  cv.error.10.tm[i] <- cv.glm(data,glm.fit,K=10)$delta[1]
+}
+cv.error.10.tm
+
+temp.pol = plot(1:10, cv.error.10.tm, type="b", xlab="degree", ylab="K-fold CV error for mean_temperature")
+
+temp.pol
+
+```
+
+We produce the fourth degree model:
 
 ```{r}
 ggplot(data, aes(x = mean_temperature, y = demand)) +
 geom_point() +
 stat_smooth(method = "lm", formula = y ~ poly(x, 4)) +
-labs(x = 'mean tempreture', y = 'demand')
+labs(x = 'mean temperature', y = 'demand')
 
 
 ```
@@ -979,7 +1141,7 @@ BIC(mod.num4)
 
 ```
 
-The BIC for this fourth degree model is better than for the first degree one.
+The BIC for this fourth degree model is better than for the first degree one. We also compared with the BIC for the second and third degree models, and this had the best performance.
 
 
 ```{r}
@@ -991,11 +1153,10 @@ plot(mod.num4)
 
 Behavior of the residuals is also better.
 
-
 We proceed to add this new variable to the model and check the performance.
 
 ```{r}
-mod.num5 <- lm(data=data, demand ~ solar_exposure + poly(mean_temperature, 4))
+mod.num5 <- lm(data=data, demand ~ poly(solar_exposure, 4) + poly(mean_temperature, 4))
 summary(mod.num5)
 
 ```
@@ -1012,10 +1173,11 @@ par(mfrow=c(2,2))
 plot(mod.num5)
 
 ```
-Residual behavior is also acceptable. Since the model behavior improved, we keep the fourth degree term and go on to add another variable (rainfall).
+Residual behavior is also acceptable. Since the model behavior improved, we keep this fourth degree term and go on to add a variable that we previously examined on the EDA section, log_rainfall.
 
 ```{r}
-mod.num6 <- lm(data=data, demand ~ solar_exposure + poly(mean_temperature, 4) + rainfall)
+mod.num6 <- lm(data=data, demand ~ poly(solar_exposure, 4) + 
+                 poly(mean_temperature, 4) + log_rainfall)
 summary(mod.num6)
 
 ```
@@ -1033,10 +1195,12 @@ plot(mod.num6)
 
 ```
 
-Residual plots show an admissible behavior. Now, we check the behavior of the model with only the rainfall variable.
+Residual plots show an admissible behavior. Now, we check the behavior of the model with only the log_rainfall variable.
+
 
 ```{r}
-mod.num7 <- lm(data=data, demand ~  rainfall)
+
+mod.num7 <- lm(data=data, demand ~ log_rainfall)
 summary(mod.num7)
 
 ```
@@ -1045,98 +1209,32 @@ summary(mod.num7)
 BIC(mod.num7)
 
 ```
-The BIC for this simple model is the worse one yet.
-
 ```{r}
 # Diagnostic
 par(mfrow=c(2,2))
 plot(mod.num7)
 
 ```
-Behavior of residuals indicates that our model may benefit from a transformation.
 
-```{r}
-ggplot(data, aes(x = rainfall, y = demand)) +
-geom_point() +
-stat_smooth(method = "lm", formula = y ~ x) +
-labs(x = 'rainfall', y = 'demand')
+The "log_rainfall" does not have a big impact on the model, but we keep it for now and will further analyze and decide afterwards. We proceed to build a table to compare the BIC and Adjusted $R^{2}$ of the different models more easily.
 
-
-```
-
-We see that the model may perform better if the rainfall variable is transformed to a logarithm.
-
-```{r}
-
-data$log_rainfall <- log(data$rainfall+1)
-
-
-```
-
-```{r}
-
-mod.num8 <- lm(data=data, demand ~ log_rainfall)
-summary(mod.num8)
-
-```
-
-```{r}
-BIC(mod.num8)
-
-```
-
-```{r}
-# Diagnostic
-par(mfrow=c(2,2))
-plot(mod.num8)
-
-```
-
-```{r}
-ggplot(data, aes(x = log_rainfall, y = demand)) +
-geom_point() +
-stat_smooth(method = "lm", formula = y ~ x) +
-labs(x = 'rainfall', y = 'demand')
-
-
-```
-
-Indeed, after the logarithmic transformation, the shape of the model and residual behavior are better, though BIC worsens a little. We add this new variable to the model and see the impact it has.
-
-```{r}
-mod.num9 <- lm(data=data, demand ~ solar_exposure + poly(mean_temperature, 4) + log_rainfall)
-summary(mod.num9)
-
-```
-
-```{r}
-BIC(mod.num9)
-
-```
-
-```{r}
-# Diagnostic
-par(mfrow=c(2,2))
-plot(mod.num9)
-
-```
-
-The log version of the rainfall variable does not have a big impact on the model, but we keep it for now and will further analyze and decide afterwards. We proceed to build a table to compare the BIC and Adjusted $R^{2}$ of the different models more easily.
 
 ```{r, echo=FALSE}
 
-Variables <- c('solar exposure/mean temperature', 'solar exposure/mean temperature^4', 'solar exposure/mean temperature^4/rainfall', 'solar exposure/mean temperature^4/log rainfall', 'solar exposure', 'mean temperature^4', 'mean temperature', 'rainfall', 'log rainfall')
-BIC <- c(45119.29, 44126.4, 44116.34, 44111.89, 45113.74, 44193.91, 45241.01, 45310.08, 45316.64)
-adjusted_R20<- c(0.09334, 0.4436, 0.4481, 0.4493, 0.09287, 0.4234, 0.03545, 0.002794, -0.0003652)
+Variables_num <- c('solar exposure^4/mean temperature', 'solar exposure^4/mean temperature^4', 'solar exposure^4/mean temperature^4/log rainfall', 'solar exposure^4', 'solar exposure', 'mean temperature^4', 'mean temperature', 'log rainfall')
+BIC_num <- c(45119.29, 44083.89, 44066.24, 45044.64, 45113.74, 44193.91, 45241.01, 45316.64)
+Adjusted_R2_num<- c(0.1308, 0.4601, 0.4664, 0.131, 0.09287, 0.4234, -0.03545, -0.0003652)
 
-tdf <- data.frame(Variables, BIC, adjusted_R2)
-kable(tdf0, type='latex')
+tdf_num <- data.frame(Variables_num, BIC_num, Adjusted_R2_num)
+kable(tdf_num, type='latex')
 
 
 ```
-From the above table we can see that the value for Adjusted $R^{2}$ log rainfall is extremely bad, so we decide to remove this feature.
 
-### 5.1.2 Adding categorical variables
+From the above table we can see that the model behavior does not improve much by adding log rainfall so we decide to remove this feature. Therefore, the resulting model has only the fourth degree solar exposure and mean temperature variables.
+
+
+### 4.1.2 Adding categorical variables
 
 Next, we build a model considering only the categorical variables. We start considering all three of them.
 
@@ -1161,7 +1259,7 @@ par(mfrow=c(2,2))
 plot(mod.cat0)
 ```
 
-Next, since they are not many, we try all possible combinations of the variables to find the model which results in the best performance in terms of BIC and Adjusted $R^{2}$. We start with a combination of the school day and season features.
+Next, since they are not many, we consider all possible subsets of the variables to find the model which results in the best performance in terms of BIC and Adjusted $R^{2}$. We start with a combination of the school day and season features.
 
 ```{r}
 mod.cat1 <- lm(demand ~ school_day + season , data=data)
@@ -1271,24 +1369,26 @@ BIC(mod.cat6)
 
 ```{r, echo=FALSE}
 
-Variables <- c('school day/season/holiday', 'school day/season', 'season/holiday', 'school day/holiday', 'school day', 'holiday', 'season')
-BIC <- c(44616.54, 44724.16, 44626.09, 45166.55, 45274.07, 45181.64, 44750.67)
-adjusted_R2 <- c(0.2953041, 0.2553871, 0.2897857, 0.07244284, 0.01995818, 0.0626738, 0.2433993)
+Variables_cat <- c('school day/season/holiday', 'school day/season', 'season/holiday', 'school day/holiday', 'school day', 'holiday', 'season')
+BIC_cat <- c(44616.54, 44724.16, 44626.09, 45166.55, 45274.07, 45181.64, 44750.67)
+Adjusted_R2_cat <- c(0.2953041, 0.2553871, 0.2897857, 0.07244284, 0.01995818, 0.0626738, 0.2433993)
 
-tdf <- data.frame(Variables, BIC, Adjusted_R2)
-kable(tdf, type='latex')
+tdf_cat <- data.frame(Variables_cat, BIC_cat, Adjusted_R2_cat)
+kable(tdf_cat, type='latex')
 
 
 ```
 
-After comparing the BIC and Adjusted * $R^{2}$ for all the different models, we conclude that the best model performance is achieved when considering all three categorical variables. These metric do not change much when removing the school feature, but we keep it for now and will decide in the following section.
+After comparing the BIC and Adjusted $R^{2}$ for all the different models, we conclude that the best model performance is achieved when considering all three categorical variables. However, since during the exploratory phase we determined that the holiday feature is severely unbalanced, we remove it from our model and keep only the season and school day variables.
 
-### 5.1.3 Unified model
+
+### 4.1.3 Unified model
 
 Combining all the numerical and categorical variables we get the following model:
 
 ```{r}
-mod.tot0 <- lm(demand ~ solar_exposure + poly(mean_temperature, 4) + log_rainfall + season + school_day + holiday , data=data)
+mod.tot0 <- lm(demand ~ poly(solar_exposure, 4) + poly(mean_temperature, 4) +
+                 season + school_day , data=data)
 summary(mod.tot0)
 
 ```
@@ -1304,27 +1404,10 @@ par(mfrow=c(2,2))
 plot(mod.tot0)
 
 ```
-Behavior of the residuals is acceptable. We move on to build a new model, this time without considering the rainfall and school day variables, which as seen previously resulted in the least improvements on performance. Furthermore, we remove the holiday feature, as it is severely unbalanced.
+Behavior of the residuals is acceptable since they are distributed uniformly across the fitted values, and the model has constant variance. The BIC and Adjusted $R^{2}$ are better with respect to the all the previous models.
 
-```{r}
-mod.tot1 <- lm(demand ~ solar_exposure + poly(mean_temperature, 4) + season, data=data)
-summary(mod.tot1)
 
-```
-```{r}
-
-BIC(mod.tot1)
-
-```
-
-```{r}
-par(mfrow=c(2,2))
-plot(mod.tot1)
-
-```
-The BIC and Adjusted * $R^{2}$ did not deteriorate much when removing the two features. Behavior of the residuals also did not change much for this new model.
-
-## 5.2 Logistic Regression
+## 4.2 Logistic Regression
 
 In this section we will build a logistic regression model in order to classify RRP as high or not, depending on whether it is above or below the median. To measure performance we will compare the different AUC (Area Under the Curve).
 
@@ -1362,7 +1445,7 @@ ggplot(toplot2, aes(fill=condition, y=value, x=high_RRP)) +
 
 The sets were separated into 70% training and 30% validation, obtaining samples of the original set randomly. The TRUE and FALSE labels are equally balanced in the train and test sets. This is to be expected since the split was at the median.
 
-### 5.2.1 Logistic Regression Using Seasons
+### 4.2.1 Logistic Regression Using Seasons
 
 For this first part, a model will be tested using the season variable, then it will be replaced by the month variable, in order to compare and select the best performance.
 
@@ -1435,7 +1518,7 @@ roc.out <- roc(train$high_RRP, logistic.prob, levels=c(FALSE, TRUE))
 plot(roc.out, print.auc=TRUE, legacy.axes=TRUE, xlab="False positive rate", ylab="True positive rate")
 ```
 
-### 5.2.1 Logistic Regression Using Months
+### 4.2.1 Logistic Regression Using Months
 
 As an alternative, we try to see if we can increase the performance of the model by using the months variables instead of the seasons, repeating the same procedure above but skipping some steps.
 
@@ -1475,11 +1558,14 @@ roc.out <- roc(train$high_RRP, logistic.prob, levels=c(FALSE, TRUE))
 plot(roc.out, print.auc=TRUE, legacy.axes=TRUE, xlab="False positive rate", ylab="True positive rate")
 ```
 
-# 6 Model Evaluation
+# 5 Model Evaluation
 
-## 6.1 Linear Regression Evaluation
 
-To evaluate the performance of our models, we will first compare the MSE (Mean Squared Errors) of the training set vs the test set, and then also use a 10-fold cross validation.
+## 5.1 Linear Regression Evaluation
+
+To evaluate the performance of our models, we will first get the MSE (Mean Squared Errors) of the test set by doing a simple test-train-split. We assign the 80 percent of the data to the training set and the rest of the data to the test set.
+
+ 
 
 ```{r}
 ###split the data into train and test and see their error(MSE)
@@ -1491,14 +1577,12 @@ ntrain = floor(dim(data)[1]*0.8)  #1678 samples for test(80 percent of the data)
 train <- sample(1:n, size=ntrain, replace= FALSE) #index of training samples
 
 # linear model with training data
-mod.tot0.train <- lm(demand ~ solar_exposure + poly(mean_temperature, 4) + season , data=data , subset=train)
+mod.tot0.train <- lm(demand ~ poly(solar_exposure, 4) + 
+                       poly(mean_temperature, 4) + season +
+                       school_day , data=data , subset=train)
 
 #predict the demand of the test data based on fitted model
 y.pred <- predict(mod.tot0.train, newdata=data[-train, ])
-
-# mean squared error on training data
-MSE.train <- mean(residuals(mod.tot0.train)^2)
-MSE.train
 
 # mean squared error on test data
 MSE.val <- mean((data$demand[-train]-y.pred)^2)
@@ -1507,6 +1591,10 @@ MSE.val
 
 ```
 
+
+
+Then also we use a 10-fold cross validation to have the better evaluation of our model and its error based on training data with 10 different parts of the data.
+For training the data, we split the data to 10 folds. Each time we choose one of these folds as the test set and other nine parts as training set. After training the data and computing the MSE errors, we get an average of the errors achieved from 10 different test sets. At the end, the average amount of MSE error would be the best evaluation of the model's error.
 
 ```{r}
 # k-fold cross-validation
@@ -1521,8 +1609,11 @@ colnames(cv.errors) <- 1
 
 
 for(j in 1:k){
-  best.fit <- lm(demand ~ solar_exposure + poly(mean_temperature, 4) +season, data=data[folds!=j,])
-  test.mat <- model.matrix(demand~solar_exposure + poly(mean_temperature, 4) + season, data=data[folds==j,])
+  best.fit <- lm(demand ~ poly(solar_exposure, 4) + poly(mean_temperature, 4) +
+                   season + school_day, data=data[folds!=j,])
+  test.mat <- model.matrix(demand ~ poly(solar_exposure, 4) +
+                             poly(mean_temperature, 4) + season + 
+                             school_day, data=data[folds==j,])
   y.pred <- predict(mod.tot0.train, newdata=data[folds==j,])
   cv.errors[j,1] <- mean( (data$demand[folds==j]-y.pred)^2)
   
@@ -1535,7 +1626,7 @@ mean.cv.errors
 
 The error values obtained by cross validation are less than the ones obtained by calculating the MSE, but not by much.
 
-```{r}
+```{r, echo=FALSE}
 
 cv.errors <- cv.errors[1:10,1]
 tab <- matrix(cv.errors, ncol=1, byrow=TRUE)
@@ -1549,16 +1640,9 @@ tab <- as.table(tab)
 tab
 
 ```
-```{r}
-
-crossval.table <- data.frame(folds = c(1:10),
-                   cross.validation.errors = cv.errors)
-crossval.table 
-
-```
 
 
-## 6.2 Logistic Regression Evaluation
+## 5.2 Logistic Regression Evaluation
 In this part, the performance of the logistic regression model selected among those tested (second model using months) will be evaluated. The matrix evaluated in the test-set (623 samples) will be printed using the best threshold
 
 ```{r}
@@ -1576,10 +1660,11 @@ CM <- table(logistic.pred, test$high_RRP)
 CM
 ```
 
-From the confusion matrix, an accuracy close to 55%, a specificity of 31.3%, and a sensitivity of 83%.
+From the confusion matrix, an accuracy close to 56%, a specificity of 45.69%, and a sensitivity of 66%.
 
 
-# 7 Conclusion
+# 6 Conclusion
 
-The exploratory phase provided us with many useful insights and a framework to start producing our models. The model built for predicting demand captures how the different variables influence the outcome, but it is not a perfect predictor. We managed to improve the initial model that considered all variables by analyzing the effect that different features had and selecting them based on different performance metrics. As for the logistic regression model built to classify RRP as high or not, performance was just slightly better than a random classifier. In order to improve precision in this model, more features that are currently missing should be taken into account.
+Based on the insights gained during the EDA part about the behavior of the different variables that have impact on RRP and demand, we build a regression model to predict the demand and determined that the best results are obtained by considering the "solar_exposure", "mean_temperature", "seasons" and "school_days" variables. As we saw, the behavior of the regression models had non linear correlation with two variables, "solar_exposure" and "mean_temperature". Furthermore, while performing the hypothesis test on variances in the EDA section, we could not find evidence that the variances were equal, because the data was very unbalanced. Thus, we could not use the t-test to check equality of the means. We couldn't find any other tests on the mean of the demand on different categories or any kind of ANOVA/ANCOVA test for seasons. 
 
+Regarding logistic regression, the model that obtained the best results used the variables: "demand", "mean_temperature", "school_day", "month", and reported an area under the ROC curve equal to 0.608. The best threshold for this method was 0.43 and it is possible to see that the accuracy is quite low (56%), although the overall performance is quite low and should not be considered a good predictor of the RRP(due to the distribution of the data), the The model appears to have a decent sensitivity (66%), as reported in the confusion matrix in the previous section. 
